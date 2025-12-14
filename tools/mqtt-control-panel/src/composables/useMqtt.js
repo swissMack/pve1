@@ -19,7 +19,8 @@ export function useMqtt(brokerUrl = 'ws://192.168.1.199:8083/mqtt') {
       location: { latitude: 0, longitude: 0, altitude: 0, speed: 0, heading: 0 },
       metadata: { signalStrength: 0 },
       lastSeen: null,
-      paused: false
+      paused: false,
+      sensorInterval: 10 // Per-device sensor interval in seconds (default 10s)
     }
   })
 
@@ -62,8 +63,16 @@ export function useMqtt(brokerUrl = 'ws://192.168.1.199:8083/mqtt') {
             devices[deviceId].location = data.location
             devices[deviceId].lastSeen = data.timestamp
           } else if (type === 'status') {
+            console.log(`[MQTT] Received status for ${deviceId}:`, data)
             devices[deviceId].paused = data.paused || false
+            // Update sensor interval if present in status
+            if (data.sensorInterval !== undefined) {
+              devices[deviceId].sensorInterval = data.sensorInterval
+              console.log(`[MQTT] ✅ ${deviceId} sensor interval updated to ${data.sensorInterval}s`)
+            }
           }
+        } else {
+          console.log(`[MQTT] Received message for unknown device ${deviceId}:`, type, data)
         }
       } catch (e) {
         console.error('Error parsing message:', e)
@@ -150,6 +159,15 @@ export function useMqtt(brokerUrl = 'ws://192.168.1.199:8083/mqtt') {
     return sendDeviceCommand(deviceId, { type: 'reset' })
   }
 
+  function setDeviceSensorInterval(deviceId, intervalSeconds) {
+    const success = sendDeviceCommand(deviceId, { type: 'set_sensor_interval', value: intervalSeconds })
+    if (success) {
+      // Optimistically update local state
+      devices[deviceId].sensorInterval = intervalSeconds
+    }
+    return success
+  }
+
   function setIntervals(sensorInterval, locationInterval) {
     return sendConfigCommand({
       type: 'set_interval',
@@ -179,6 +197,7 @@ export function useMqtt(brokerUrl = 'ws://192.168.1.199:8083/mqtt') {
     pauseDevice,
     resumeDevice,
     resetDevice,
+    setDeviceSensorInterval,
     setIntervals
   }
 }

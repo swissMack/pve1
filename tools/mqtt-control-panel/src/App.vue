@@ -21,6 +21,7 @@ const {
   pauseDevice,
   resumeDevice,
   resetDevice,
+  setDeviceSensorInterval,
   setIntervals
 } = useMqtt()
 
@@ -62,6 +63,10 @@ function handleResume(deviceId) {
 
 function handleReset(deviceId) {
   resetDevice(deviceId)
+}
+
+function handleSetSensorInterval(deviceId, intervalSeconds) {
+  setDeviceSensorInterval(deviceId, intervalSeconds)
 }
 
 function handleUpdateIntervals(sensorInterval, locationInterval) {
@@ -143,6 +148,7 @@ onMounted(() => {
           @set-location="handleSetLocation"
           @set-heading="handleSetHeading"
           @set-speed="handleSetSpeed"
+          @set-sensor-interval="handleSetSensorInterval"
           @pause="handlePause"
           @resume="handleResume"
           @reset="handleReset"

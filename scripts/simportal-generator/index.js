@@ -329,6 +329,13 @@ function handleDeviceCommand(deviceId, msg) {
       console.log(`  Device reset to initial values`);
       publishDeviceStatus(deviceId, state);
       break;
+
+    case 'set_sensor_interval':
+      // Per-device sensor sampling interval (in seconds)
+      state.sensorInterval = msg.value;
+      console.log(`  Set sensor interval = ${msg.value}s (${msg.value / 60} min)`);
+      publishDeviceStatus(deviceId, state);
+      break;
   }
 }
 
@@ -338,6 +345,7 @@ function publishDeviceStatus(deviceId, state) {
   const payload = {
     deviceId,
     paused: state.paused,
+    sensorInterval: state.sensorInterval || sensorInterval / 1000, // Per-device or global interval in seconds
     timestamp: new Date().toISOString()
   };
   client.publish(topic, JSON.stringify(payload), { qos: 1 });

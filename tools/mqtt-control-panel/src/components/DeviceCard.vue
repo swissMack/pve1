@@ -19,6 +19,7 @@ const emit = defineEmits([
   'set-location',
   'set-heading',
   'set-speed',
+  'set-sensor-interval',
   'pause',
   'resume',
   'reset'
@@ -33,6 +34,11 @@ const latitude = ref(props.device?.location?.latitude || 47.38)
 const longitude = ref(props.device?.location?.longitude || 8.54)
 const speed = ref(props.device?.location?.speed || 0)
 const heading = ref(props.device?.location?.heading || 0)
+const sensorIntervalSeconds = ref(props.device?.sensorInterval || 10)
+const sensorIntervalMinutes = computed({
+  get: () => Math.round(sensorIntervalSeconds.value / 60) || 1,
+  set: (val) => { sensorIntervalSeconds.value = val * 60 }
+})
 
 // Device type labels
 const deviceTypes = {
@@ -67,6 +73,12 @@ watch(() => props.device?.location, (newVal) => {
   }
 }, { deep: true })
 
+watch(() => props.device?.sensorInterval, (newVal) => {
+  if (newVal !== undefined) {
+    sensorIntervalSeconds.value = newVal
+  }
+})
+
 // Command handlers
 function sendTemperature() {
   emit('set-sensor', props.device.id, 'temperature', temperature.value)
@@ -96,6 +108,10 @@ function sendSpeed() {
   emit('set-speed', props.device.id, speed.value)
 }
 
+function sendSensorInterval() {
+  emit('set-sensor-interval', props.device.id, sensorIntervalSeconds.value)
+}
+
 function togglePause() {
   if (props.device.paused) {
     emit('resume', props.device.id)
@@ -115,6 +131,20 @@ function formatTime(timestamp) {
   if (!timestamp) return 'Never'
   const date = new Date(timestamp)
   return date.toLocaleTimeString()
+}
+
+// Format interval in human-readable form
+function formatInterval(seconds) {
+  if (seconds >= 3600) {
+    const hours = Math.floor(seconds / 3600)
+    const mins = Math.floor((seconds % 3600) / 60)
+    return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`
+  } else if (seconds >= 60) {
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`
+  }
+  return `${seconds}s`
 }
 </script>
 
@@ -188,6 +218,22 @@ function formatTime(timestamp) {
             <Slider v-model="light" :min="0" :max="100000" :step="100" class="flex-grow" />
             <InputNumber v-model="light" :min="0" :max="100000" class="value-input" />
             <Button icon="pi pi-send" size="small" @click="sendLight" :disabled="!connected" text />
+          </div>
+        </div>
+
+        <Divider />
+
+        <!-- Sensor Interval -->
+        <div class="control-row">
+          <div class="control-label">
+            <i class="pi pi-clock"></i>
+            <span>Sensor Interval</span>
+            <span class="current-value interval-value">{{ formatInterval(device.sensorInterval || 10) }}</span>
+          </div>
+          <div class="control-input">
+            <Slider v-model="sensorIntervalMinutes" :min="1" :max="60" :step="1" class="flex-grow" />
+            <InputNumber v-model="sensorIntervalMinutes" :min="1" :max="1440" suffix=" min" class="value-input" />
+            <Button icon="pi pi-send" size="small" @click="sendSensorInterval" :disabled="!connected" text />
           </div>
         </div>
 
@@ -332,6 +378,13 @@ function formatTime(timestamp) {
   margin-left: auto;
   font-weight: 600;
   color: var(--p-primary-color);
+}
+
+.interval-value {
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.1);
+  padding: 0.125rem 0.5rem;
+  border-radius: 4px;
 }
 
 .control-input {

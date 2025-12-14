@@ -1,0 +1,144 @@
+# MQTT Test Ecosystem - Docker Compose
+# Single-command deployment: docker compose up -d
+# Target: Docker Desktop (macOS/Windows/Linux)
+
+services:
+  # EMQX MQTT Broker - Core messaging service
+  emqx:
+    image: emqx/emqx:5.8.3
+    container_name: mqtt-emqx
+    hostname: emqx
+    ports:
+      - "1883:1883"      # MQTT TCP
+      - "8883:8883"      # MQTT TLS
+      - "8083:8083"      # MQTT WebSocket
+      - "8084:8084"      # MQTT WebSocket TLS
+      - "18083:18083"    # EMQX Dashboard/Management API
+    environment:
+      - EMQX_NAME=emqx
+      - EMQX_HOST=127.0.0.1
+      - EMQX_DASHBOARD__DEFAULT_USERNAME=${EMQX_DASHBOARD_USER:-admin}
+      - EMQX_DASHBOARD__DEFAULT_PASSWORD=${EMQX_DASHBOARD_PASS:-public}
+    volumes:
+      - ./services/emqx/emqx.conf:/opt/emqx/etc/emqx.conf:ro
+      - ./services/emqx/acl.conf:/opt/emqx/etc/acl.conf:ro
+      - emqx-data:/opt/emqx/data
+      - emqx-log:/opt/emqx/log
+      - ../certs:/opt/emqx/etc/certs:ro
+    healthcheck:
+      test: ["CMD", "emqx", "ctl", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - mqtt-network
+    restart: unless-stopped
+
+  # InfluxDB - Time-series storage for message history
+  influxdb:
+    image: influxdb:2.7
+    container_name: mqtt-influxdb
+    hostname: influxdb
+    ports:
+      - "8086:8086"
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=${INFLUXDB_USER:-admin}
+      - DOCKER_INFLUXDB_INIT_PASSWORD=${INFLUXDB_PASS:-adminpassword}
+      - DOCKER_INFLUXDB_INIT_ORG=${INFLUXDB_ORG:-mqtt-org}
+      - DOCKER_INFLUXDB_INIT_BUCKET=${INFLUXDB_BUCKET:-mqtt_messages}
+      - DOCKER_INFLUXDB_INIT_RETENTION=${INFLUXDB_RETENTION:-24h}
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUXDB_TOKEN:-mqtt-influxdb-token}
+    volumes:
+      - influxdb-data:/var/lib/influxdb2
+      - influxdb-config:/etc/influxdb2
+      - ./services/influxdb/init-scripts:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "influx", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - mqtt-network
+    restart: unless-stopped
+
+  # Prometheus - Metrics collection
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: mqtt-prometheus
+    hostname: prometheus
+    ports:
+      - "9090:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+    volumes:
+      - ./services/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - mqtt-network
+    restart: unless-stopped
+    depends_on:
+      emqx:
+        condition: service_healthy
+
+  # Grafana - Visualization and dashboards
+  grafana:
+    image: grafana/grafana:10.2.2
+    container_name: mqtt-grafana
+    hostname: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASS:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=
+    volumes:
+      - ./services/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./services/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - mqtt-network
+    restart: unless-stopped
+    depends_on:
+      prometheus:
+        condition: service_healthy
+      influxdb:
+        condition: service_healthy
+
+volumes:
+  emqx-data:
+    name: mqtt-emqx-data
+  emqx-log:
+    name: mqtt-emqx-log
+  influxdb-data:
+    name: mqtt-influxdb-data
+  influxdb-config:
+    name: mqtt-influxdb-config
+  prometheus-data:
+    name: mqtt-prometheus-data
+  grafana-data:
+    name: mqtt-grafana-data
+
+networks:
+  mqtt-network:
+    name: mqtt-network
+    driver: bridge

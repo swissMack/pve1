@@ -1,0 +1,61 @@
+# MQTT Test Ecosystem - Docker Ignore
+# Files to exclude from Docker build context
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+docs/
+specs/
+README*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test artifacts
+tests/output/
+tests/reports/
+coverage/
+
+# Logs
+*.log
+logs/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Certificates (mount at runtime, not build time)
+certs/
+*.crt
+*.key
+*.pem
+
+# Build artifacts
+dist/
+build/
+node_modules/
+__pycache__/
+*.pyc
+
+# Docker Compose files (not needed in images)
+docker-compose*.yml
+Dockerfile*
+
+# Temporary
+*.tmp
+*.temp
+*.bak
+tmp/
+temp/

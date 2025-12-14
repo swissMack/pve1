@@ -1,0 +1,74 @@
+# Grafana Datasources Configuration
+# Auto-provisioned on Grafana startup
+
+apiVersion: 1
+
+# Delete datasources not defined here
+deleteDatasources: []
+
+# Datasource definitions
+datasources:
+  # Prometheus - Primary metrics source
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      httpMethod: POST
+      manageAlerts: true
+      prometheusType: Prometheus
+      prometheusVersion: 2.48.0
+      cacheLevel: 'High'
+      disableRecordingRules: false
+      incrementalQueryOverlapWindow: 10m
+    version: 1
+
+  # InfluxDB - Message history and device twins
+  - name: InfluxDB
+    type: influxdb
+    access: proxy
+    url: http://influxdb:8086
+    isDefault: false
+    editable: false
+    jsonData:
+      version: Flux
+      organization: mqtt-org
+      defaultBucket: mqtt_messages
+      tlsSkipVerify: true
+    secureJsonData:
+      token: mqtt-influxdb-token
+    version: 1
+
+  # InfluxDB - 24h Message bucket
+  - name: InfluxDB-Messages-24h
+    type: influxdb
+    access: proxy
+    url: http://influxdb:8086
+    isDefault: false
+    editable: false
+    jsonData:
+      version: Flux
+      organization: mqtt-org
+      defaultBucket: mqtt_messages_24h
+      tlsSkipVerify: true
+    secureJsonData:
+      token: mqtt-influxdb-token
+    version: 1
+
+  # InfluxDB - Device Twins bucket
+  - name: InfluxDB-DeviceTwins
+    type: influxdb
+    access: proxy
+    url: http://influxdb:8086
+    isDefault: false
+    editable: false
+    jsonData:
+      version: Flux
+      organization: mqtt-org
+      defaultBucket: device_twins
+      tlsSkipVerify: true
+    secureJsonData:
+      token: mqtt-influxdb-token
+    version: 1

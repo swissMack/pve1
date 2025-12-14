@@ -1,0 +1,17 @@
+# Grafana Dashboard Provisioning Configuration
+# Automatically loads dashboards from the specified paths
+
+apiVersion: 1
+
+providers:
+  - name: 'MQTT Test Ecosystem'
+    orgId: 1
+    folder: 'MQTT'
+    folderUid: 'mqtt-folder'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

@@ -1,0 +1,157 @@
+{
+  "description": "MQTT Client Test Configurations",
+  "version": "1.0.0",
+  "brokers": {
+    "tcp": {
+      "host": "localhost",
+      "port": 1883,
+      "protocol": "mqtt"
+    },
+    "tls": {
+      "host": "localhost",
+      "port": 8883,
+      "protocol": "mqtts",
+      "tls": {
+        "ca": "../certs/ca.crt",
+        "cert": "../certs/client.crt",
+        "key": "../certs/client.key",
+        "rejectUnauthorized": false
+      }
+    },
+    "websocket": {
+      "host": "localhost",
+      "port": 8083,
+      "protocol": "ws",
+      "path": "/mqtt"
+    },
+    "websocket_tls": {
+      "host": "localhost",
+      "port": 8084,
+      "protocol": "wss",
+      "path": "/mqtt",
+      "tls": {
+        "rejectUnauthorized": false
+      }
+    }
+  },
+  "clients": {
+    "default": {
+      "clientId": "test-client-default",
+      "clean": true,
+      "keepalive": 60,
+      "reconnectPeriod": 1000,
+      "connectTimeout": 30000,
+      "protocolVersion": 5
+    },
+    "persistent": {
+      "clientId": "test-client-persistent",
+      "clean": false,
+      "keepalive": 60,
+      "reconnectPeriod": 1000,
+      "connectTimeout": 30000,
+      "protocolVersion": 5,
+      "properties": {
+        "sessionExpiryInterval": 3600
+      }
+    },
+    "authenticated": {
+      "clientId": "test-client-auth",
+      "clean": true,
+      "keepalive": 60,
+      "username": "testuser",
+      "password": "testpass",
+      "protocolVersion": 5
+    },
+    "admin": {
+      "clientId": "test-client-admin",
+      "clean": true,
+      "keepalive": 60,
+      "username": "admin",
+      "password": "admin",
+      "protocolVersion": 5
+    },
+    "mqtt311": {
+      "clientId": "test-client-mqtt311",
+      "clean": true,
+      "keepalive": 60,
+      "protocolVersion": 4
+    },
+    "qos0": {
+      "clientId": "test-client-qos0",
+      "clean": true,
+      "keepalive": 60,
+      "protocolVersion": 5,
+      "defaultQoS": 0
+    },
+    "qos1": {
+      "clientId": "test-client-qos1",
+      "clean": true,
+      "keepalive": 60,
+      "protocolVersion": 5,
+      "defaultQoS": 1
+    },
+    "qos2": {
+      "clientId": "test-client-qos2",
+      "clean": true,
+      "keepalive": 60,
+      "protocolVersion": 5,
+      "defaultQoS": 2
+    },
+    "lwt": {
+      "clientId": "test-client-lwt",
+      "clean": true,
+      "keepalive": 30,
+      "protocolVersion": 5,
+      "will": {
+        "topic": "clients/lwt",
+        "payload": "{\"status\": \"offline\", \"clientId\": \"test-client-lwt\"}",
+        "qos": 1,
+        "retain": false,
+        "properties": {
+          "contentType": "application/json"
+        }
+      }
+    }
+  },
+  "topics": {
+    "test": {
+      "base": "test",
+      "telemetry": "test/telemetry",
+      "commands": "test/commands",
+      "events": "test/events"
+    },
+    "devices": {
+      "base": "$devices",
+      "twin_get": "$devices/{deviceId}/twin/get",
+      "twin_update": "$devices/{deviceId}/twin/update",
+      "twin_delta": "$devices/{deviceId}/twin/delta"
+    },
+    "shared": {
+      "group": "$share/testgroup",
+      "topic": "$share/testgroup/test/shared"
+    },
+    "system": {
+      "clients_connected": "$SYS/brokers/+/clients/connected",
+      "clients_disconnected": "$SYS/brokers/+/clients/disconnected"
+    }
+  },
+  "testData": {
+    "messages": {
+      "simple": "Hello MQTT",
+      "json": "{\"temperature\": 25.5, \"humidity\": 60}",
+      "binary": "base64:SGVsbG8gV29ybGQ="
+    },
+    "payloadSizes": {
+      "small": 100,
+      "medium": 10000,
+      "large": 100000,
+      "maxAllowed": 262144
+    }
+  },
+  "timeouts": {
+    "connect": 5000,
+    "publish": 5000,
+    "subscribe": 5000,
+    "message": 10000
+  }
+}

@@ -27,11 +27,11 @@ This is a **multi-container infrastructure project**. Paths:
 
 **Purpose**: Project initialization and Docker Compose skeleton
 
-- [ ] T001 Create project directory structure per plan.md in repository root
-- [ ] T002 [P] Create docker/docker-compose.yml with service definitions (emqx, influxdb, grafana, prometheus)
-- [ ] T003 [P] Create docker/.env.example with all environment variables from quickstart.md
-- [ ] T004 [P] Create docker/docker-compose.dev.yml with development overrides (debug ports, volume mounts)
-- [ ] T005 Create .gitignore with docker volumes, certs, and env files
+- [x] T001 Create project directory structure per plan.md in repository root
+- [x] T002 [P] Create docker/docker-compose.yml with service definitions (emqx, influxdb, grafana, prometheus)
+- [x] T003 [P] Create docker/.env.example with all environment variables from quickstart.md
+- [x] T004 [P] Create docker/docker-compose.dev.yml with development overrides (debug ports, volume mounts)
+- [x] T005 Create .gitignore with docker volumes, certs, and env files
 
 ---
 
@@ -41,13 +41,13 @@ This is a **multi-container infrastructure project**. Paths:
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T006 Create docker/services/emqx/emqx.conf with base listener configuration (ports 1883, 8883, 8083, 8084)
-- [ ] T007 Configure EMQX session persistence in docker/services/emqx/emqx.conf (RocksDB backend)
-- [ ] T008 [P] Create docker/services/influxdb/init-scripts/init.sh for bucket and retention policy setup
-- [ ] T009 [P] Create docker/services/prometheus/prometheus.yml with EMQX scrape target
-- [ ] T010 [P] Create docker/services/grafana/provisioning/datasources/datasources.yml for Prometheus and InfluxDB
-- [ ] T011 Add health check configurations to all services in docker/docker-compose.yml
-- [ ] T012 Create scripts/wait-for-services.sh to verify all services are ready before tests
+- [x] T006 Create docker/services/emqx/emqx.conf with base listener configuration (ports 1883, 8883, 8083, 8084)
+- [x] T007 Configure EMQX session persistence in docker/services/emqx/emqx.conf (RocksDB backend)
+- [x] T008 [P] Create docker/services/influxdb/init-scripts/init.sh for bucket and retention policy setup
+- [x] T009 [P] Create docker/services/prometheus/prometheus.yml with EMQX scrape target
+- [x] T010 [P] Create docker/services/grafana/provisioning/datasources/datasources.yml for Prometheus and InfluxDB
+- [x] T011 Add health check configurations to all services in docker/docker-compose.yml
+- [x] T012 Create scripts/wait-for-services.sh to verify all services are ready before tests
 
 **Checkpoint**: Foundation ready - `docker compose up` starts all services, EMQX accepts connections on port 1883
 
@@ -61,22 +61,22 @@ This is a **multi-container infrastructure project**. Paths:
 
 ### Tests for User Story 1
 
-- [ ] T013 [P] [US1] Create tests/integration/test_basic_connectivity.sh (connect, pub, sub on port 1883)
-- [ ] T014 [P] [US1] Create tests/integration/test_qos_levels.sh (verify QoS 0, 1, 2 delivery semantics)
-- [ ] T015 [P] [US1] Create tests/integration/test_session_persistence.sh (clean session false, reconnect, message delivery)
-- [ ] T016 [P] [US1] Create tests/integration/test_mqtt5_features.sh (shared subscriptions, message expiry, topic aliases)
-- [ ] T017 [P] [US1] Create tests/integration/test_retained_messages.sh (retain flag, new subscriber delivery)
+- [x] T013 [P] [US1] Create tests/integration/test_basic_connectivity.sh (connect, pub, sub on port 1883)
+- [x] T014 [P] [US1] Create tests/integration/test_qos_levels.sh (verify QoS 0, 1, 2 delivery semantics)
+- [x] T015 [P] [US1] Create tests/integration/test_session_persistence.sh (clean session false, reconnect, message delivery)
+- [x] T016 [P] [US1] Create tests/integration/test_mqtt5_features.sh (shared subscriptions, message expiry, topic aliases)
+- [x] T017 [P] [US1] Create tests/integration/test_retained_messages.sh (retain flag, new subscriber delivery)
 
 ### Implementation for User Story 1
 
-- [ ] T018 [US1] Configure MQTT 3.1.1 and 5.0 protocol support in docker/services/emqx/emqx.conf
-- [ ] T019 [US1] Configure QoS 0/1/2 settings in docker/services/emqx/emqx.conf (max_inflight, retry_interval)
-- [ ] T020 [US1] Configure shared subscriptions ($share group) in docker/services/emqx/emqx.conf
-- [ ] T021 [US1] Configure message expiry and session expiry defaults in docker/services/emqx/emqx.conf
-- [ ] T022 [US1] Configure rate limiting (100 conn/sec per IP) in docker/services/emqx/emqx.conf
-- [ ] T023 [US1] Configure max message payload size (256KB) in docker/services/emqx/emqx.conf
-- [ ] T024 [US1] Configure client takeover policy in docker/services/emqx/emqx.conf
-- [ ] T025 [US1] Create tests/fixtures/mqtt-client-config.json with test client configurations
+- [x] T018 [US1] Configure MQTT 3.1.1 and 5.0 protocol support in docker/services/emqx/emqx.conf
+- [x] T019 [US1] Configure QoS 0/1/2 settings in docker/services/emqx/emqx.conf (max_inflight, retry_interval)
+- [x] T020 [US1] Configure shared subscriptions ($share group) in docker/services/emqx/emqx.conf
+- [x] T021 [US1] Configure message expiry and session expiry defaults in docker/services/emqx/emqx.conf
+- [x] T022 [US1] Configure rate limiting (100 conn/sec per IP) in docker/services/emqx/emqx.conf
+- [x] T023 [US1] Configure max message payload size (256KB) in docker/services/emqx/emqx.conf
+- [x] T024 [US1] Configure client takeover policy in docker/services/emqx/emqx.conf
+- [x] T025 [US1] Create tests/fixtures/mqtt-client-config.json with test client configurations
 - [ ] T026 [US1] Run and verify all US1 tests pass
 
 **Checkpoint**: User Story 1 complete - basic MQTT messaging works with all protocol features
@@ -91,21 +91,21 @@ This is a **multi-container infrastructure project**. Paths:
 
 ### Tests for User Story 2
 
-- [ ] T027 [P] [US2] Create tests/integration/test_tls_connection.sh (port 8883, cert validation)
-- [ ] T028 [P] [US2] Create tests/integration/test_username_auth.sh (valid/invalid credentials)
-- [ ] T029 [P] [US2] Create tests/integration/test_mutual_tls.sh (client certificate authentication)
-- [ ] T030 [P] [US2] Create tests/integration/test_acl_enforcement.sh (publish/subscribe permissions)
+- [x] T027 [P] [US2] Create tests/integration/test_tls_connection.sh (port 8883, cert validation)
+- [x] T028 [P] [US2] Create tests/integration/test_username_auth.sh (valid/invalid credentials)
+- [x] T029 [P] [US2] Create tests/integration/test_mutual_tls.sh (client certificate authentication)
+- [x] T030 [P] [US2] Create tests/integration/test_acl_enforcement.sh (publish/subscribe permissions)
 
 ### Implementation for User Story 2
 
-- [ ] T031 [US2] Create scripts/generate-certs.sh for CA, server, and client certificate generation
-- [ ] T032 [US2] Configure TLS listener (port 8883) in docker/services/emqx/emqx.conf with cert paths
-- [ ] T033 [US2] Configure WebSocket TLS listener (port 8084) in docker/services/emqx/emqx.conf
-- [ ] T034 [US2] Create config/users.json with test user credentials (testuser/testpass, admin/admin)
-- [ ] T035 [US2] Configure EMQX authentication backend (file-based) in docker/services/emqx/emqx.conf
-- [ ] T036 [US2] Create docker/services/emqx/acl.conf with topic permission rules
-- [ ] T037 [US2] Configure ACL authorization in docker/services/emqx/emqx.conf (hot-reload enabled)
-- [ ] T038 [US2] Create tests/fixtures/certs/ directory structure for test certificates
+- [x] T031 [US2] Create scripts/generate-certs.sh for CA, server, and client certificate generation
+- [x] T032 [US2] Configure TLS listener (port 8883) in docker/services/emqx/emqx.conf with cert paths
+- [x] T033 [US2] Configure WebSocket TLS listener (port 8084) in docker/services/emqx/emqx.conf
+- [x] T034 [US2] Create config/users.json with test user credentials (testuser/testpass, admin/admin)
+- [x] T035 [US2] Configure EMQX authentication backend (file-based) in docker/services/emqx/emqx.conf
+- [x] T036 [US2] Create docker/services/emqx/acl.conf with topic permission rules
+- [x] T037 [US2] Configure ACL authorization in docker/services/emqx/emqx.conf (hot-reload enabled)
+- [x] T038 [US2] Create tests/fixtures/certs/ directory structure for test certificates
 - [ ] T039 [US2] Run and verify all US2 tests pass
 
 **Checkpoint**: User Story 2 complete - TLS, auth, and ACLs working
@@ -120,18 +120,18 @@ This is a **multi-container infrastructure project**. Paths:
 
 ### Tests for User Story 3
 
-- [ ] T040 [P] [US3] Create tests/integration/test_prometheus_metrics.sh (scrape /metrics endpoint)
-- [ ] T041 [P] [US3] Create tests/integration/test_health_endpoints.sh (liveness, readiness probes)
-- [ ] T042 [P] [US3] Create tests/integration/test_grafana_dashboards.sh (dashboard loads, data present)
+- [x] T040 [P] [US3] Create tests/integration/test_prometheus_metrics.sh (scrape /metrics endpoint)
+- [x] T041 [P] [US3] Create tests/integration/test_health_endpoints.sh (liveness, readiness probes)
+- [x] T042 [P] [US3] Create tests/integration/test_grafana_dashboards.sh (dashboard loads, data present)
 
 ### Implementation for User Story 3
 
-- [ ] T043 [US3] Configure Prometheus metrics endpoint in docker/services/emqx/emqx.conf
-- [ ] T044 [US3] Create docker/services/grafana/dashboards/mqtt-overview.json with connection/message metrics
-- [ ] T045 [US3] Create docker/services/grafana/dashboards/mqtt-clients.json with per-client metrics
-- [ ] T046 [US3] Create docker/services/grafana/provisioning/dashboards/dashboards.yml for auto-provisioning
-- [ ] T047 [US3] Configure structured JSON logging in docker/services/emqx/emqx.conf
-- [ ] T048 [US3] Configure trace logging for selected topics in docker/services/emqx/emqx.conf
+- [x] T043 [US3] Configure Prometheus metrics endpoint in docker/services/emqx/emqx.conf
+- [x] T044 [US3] Create docker/services/grafana/dashboards/mqtt-overview.json with connection/message metrics
+- [x] T045 [US3] Create docker/services/grafana/dashboards/mqtt-clients.json with per-client metrics
+- [x] T046 [US3] Create docker/services/grafana/provisioning/dashboards/dashboards.yml for auto-provisioning
+- [x] T047 [US3] Configure structured JSON logging in docker/services/emqx/emqx.conf
+- [x] T048 [US3] Configure trace logging for selected topics in docker/services/emqx/emqx.conf
 - [ ] T049 [US3] Run and verify all US3 tests pass
 
 **Checkpoint**: User Story 3 complete - observability stack operational

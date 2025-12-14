@@ -1,0 +1,54 @@
+{
+  "description": "MQTT User Credentials for Authentication",
+  "version": "1.0.0",
+  "note": "Passwords should be hashed in production. Plain text for dev/test only.",
+  "users": [
+    {
+      "username": "admin",
+      "password": "admin",
+      "is_superuser": true,
+      "description": "Administrator account with full access"
+    },
+    {
+      "username": "testuser",
+      "password": "testpass",
+      "is_superuser": false,
+      "description": "Test user for integration testing"
+    },
+    {
+      "username": "device-gateway",
+      "password": "gateway-secret",
+      "is_superuser": false,
+      "description": "Device gateway service account"
+    },
+    {
+      "username": "rules-engine",
+      "password": "rules-secret",
+      "is_superuser": false,
+      "description": "Rules engine service account"
+    },
+    {
+      "username": "dashboard",
+      "password": "dashboard-secret",
+      "is_superuser": false,
+      "description": "Dashboard/monitoring service account"
+    }
+  ],
+  "groups": [
+    {
+      "name": "admins",
+      "members": ["admin"],
+      "description": "Administrator group"
+    },
+    {
+      "name": "services",
+      "members": ["device-gateway", "rules-engine", "dashboard"],
+      "description": "Internal service accounts"
+    },
+    {
+      "name": "testers",
+      "members": ["testuser"],
+      "description": "Test/development accounts"
+    }
+  ]
+}

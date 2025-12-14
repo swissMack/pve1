@@ -1,0 +1,638 @@
+openapi: 3.1.0
+info:
+  title: MQTT Test Ecosystem - Rules & Messages API
+  description: |
+    Rules engine management and message history/replay API.
+
+    **Rules Engine Base URL**: http://localhost:18083/api/v5/rules
+    **Messages API Base URL**: http://localhost:8080/api/v1/messages
+
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:18083/api/v5
+    description: EMQX Rules Engine API
+  - url: http://localhost:8080/api/v1
+    description: Messages API Server
+
+tags:
+  - name: Rules
+    description: Rules engine management (FR-040 to FR-043)
+  - name: Messages
+    description: Message history and replay (FR-030 to FR-034)
+
+paths:
+  /rules:
+    get:
+      tags: [Rules]
+      summary: List rules
+      operationId: listRules
+      responses:
+        '200':
+          description: List of rules
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Rule'
+
+    post:
+      tags: [Rules]
+      summary: Create rule
+      operationId: createRule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RuleCreate'
+      responses:
+        '201':
+          description: Rule created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Rule'
+        '400':
+          description: Invalid rule syntax
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /rules/{ruleId}:
+    get:
+      tags: [Rules]
+      summary: Get rule
+      operationId: getRule
+      parameters:
+        - name: ruleId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Rule details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Rule'
+        '404':
+          description: Rule not found
+
+    put:
+      tags: [Rules]
+      summary: Update rule
+      operationId: updateRule
+      parameters:
+        - name: ruleId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RuleCreate'
+      responses:
+        '200':
+          description: Rule updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Rule'
+
+    delete:
+      tags: [Rules]
+      summary: Delete rule
+      operationId: deleteRule
+      parameters:
+        - name: ruleId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Rule deleted
+
+  /rules/{ruleId}/test:
+    post:
+      tags: [Rules]
+      summary: Test rule
+      description: Test a rule against a sample message
+      operationId: testRule
+      parameters:
+        - name: ruleId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RuleTestRequest'
+      responses:
+        '200':
+          description: Test result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuleTestResult'
+
+  /rules/{ruleId}/metrics:
+    get:
+      tags: [Rules]
+      summary: Get rule metrics
+      operationId: getRuleMetrics
+      parameters:
+        - name: ruleId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Rule execution metrics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuleMetrics'
+
+  /messages/history:
+    get:
+      tags: [Messages]
+      summary: Query message history
+      description: Query historical messages from InfluxDB (FR-031)
+      operationId: queryMessages
+      parameters:
+        - name: topic
+          in: query
+          required: true
+          description: Topic filter (supports wildcards)
+          schema:
+            type: string
+        - name: from
+          in: query
+          required: true
+          description: Start time (ISO 8601)
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          description: End time (ISO 8601, defaults to now)
+          schema:
+            type: string
+            format: date-time
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+            maximum: 10000
+        - name: client_id
+          in: query
+          description: Filter by publisher client ID
+          schema:
+            type: string
+        - name: qos
+          in: query
+          description: Filter by QoS level
+          schema:
+            type: integer
+            enum: [0, 1, 2]
+      responses:
+        '200':
+          description: Historical messages
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StoredMessage'
+                  meta:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                      from:
+                        type: string
+                        format: date-time
+                      to:
+                        type: string
+                        format: date-time
+
+  /messages/replay:
+    post:
+      tags: [Messages]
+      summary: Replay messages
+      description: Replay historical messages to topics (FR-032)
+      operationId: replayMessages
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReplayRequest'
+      responses:
+        '202':
+          description: Replay started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReplayStatus'
+
+  /messages/replay/{replayId}:
+    get:
+      tags: [Messages]
+      summary: Get replay status
+      operationId: getReplayStatus
+      parameters:
+        - name: replayId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Replay status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReplayStatus'
+
+    delete:
+      tags: [Messages]
+      summary: Cancel replay
+      operationId: cancelReplay
+      parameters:
+        - name: replayId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Replay cancelled
+
+  /messages/dlq:
+    get:
+      tags: [Messages]
+      summary: List dead-letter queue messages
+      description: Query undeliverable messages (FR-033)
+      operationId: listDLQMessages
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+        - name: topic
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: DLQ messages
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DLQMessage'
+
+  /messages/dlq/{messageId}:
+    delete:
+      tags: [Messages]
+      summary: Delete DLQ message
+      operationId: deleteDLQMessage
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Message deleted
+
+    post:
+      tags: [Messages]
+      summary: Retry DLQ message
+      description: Re-publish a dead-letter message
+      operationId: retryDLQMessage
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Message retried
+        '404':
+          description: Message not found
+
+components:
+  schemas:
+    Rule:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        sql:
+          type: string
+          description: SQL-like rule definition
+        actions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Action'
+        enabled:
+          type: boolean
+        description:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    RuleCreate:
+      type: object
+      required:
+        - name
+        - sql
+        - actions
+      properties:
+        name:
+          type: string
+          maxLength: 256
+        sql:
+          type: string
+          description: |
+            SQL-like rule. Example:
+            SELECT * FROM "devices/+/telemetry" WHERE temperature > 30
+        actions:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/Action'
+        enabled:
+          type: boolean
+          default: true
+        description:
+          type: string
+
+    Action:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum: [webhook, republish, influxdb, console]
+        config:
+          oneOf:
+            - $ref: '#/components/schemas/WebhookConfig'
+            - $ref: '#/components/schemas/RepublishConfig'
+            - $ref: '#/components/schemas/InfluxDBConfig'
+            - $ref: '#/components/schemas/ConsoleConfig'
+
+    WebhookConfig:
+      type: object
+      required:
+        - url
+      properties:
+        url:
+          type: string
+          format: uri
+        method:
+          type: string
+          enum: [POST, PUT]
+          default: POST
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+        body_template:
+          type: string
+          description: Template for request body
+        retry_times:
+          type: integer
+          default: 3
+        retry_interval:
+          type: integer
+          description: Retry interval in milliseconds
+          default: 1000
+
+    RepublishConfig:
+      type: object
+      required:
+        - topic
+      properties:
+        topic:
+          type: string
+          description: Target topic (supports ${var} placeholders)
+        qos:
+          type: integer
+          enum: [0, 1, 2]
+          default: 0
+        retain:
+          type: boolean
+          default: false
+        payload_template:
+          type: string
+          description: Template for payload transformation
+
+    InfluxDBConfig:
+      type: object
+      properties:
+        bucket:
+          type: string
+          default: mqtt_messages
+        measurement:
+          type: string
+        tags:
+          type: object
+          additionalProperties:
+            type: string
+        fields:
+          type: object
+          additionalProperties:
+            type: string
+
+    ConsoleConfig:
+      type: object
+      properties:
+        format:
+          type: string
+          enum: [json, text]
+          default: json
+
+    RuleTestRequest:
+      type: object
+      required:
+        - topic
+        - payload
+      properties:
+        topic:
+          type: string
+        payload:
+          type: object
+        qos:
+          type: integer
+          default: 0
+        client_id:
+          type: string
+
+    RuleTestResult:
+      type: object
+      properties:
+        matched:
+          type: boolean
+        output:
+          type: object
+          description: Transformed output
+        actions_triggered:
+          type: array
+          items:
+            type: string
+
+    RuleMetrics:
+      type: object
+      properties:
+        matched:
+          type: integer
+        passed:
+          type: integer
+        failed:
+          type: integer
+        rate:
+          type: number
+          description: Matches per second
+        last_matched_at:
+          type: string
+          format: date-time
+
+    StoredMessage:
+      type: object
+      properties:
+        id:
+          type: string
+        topic:
+          type: string
+        payload:
+          type: string
+          description: Base64 encoded payload
+        qos:
+          type: integer
+        retain:
+          type: boolean
+        timestamp:
+          type: string
+          format: date-time
+        client_id:
+          type: string
+        properties:
+          type: object
+          properties:
+            content_type:
+              type: string
+            correlation_data:
+              type: string
+            user_properties:
+              type: object
+              additionalProperties:
+                type: string
+
+    ReplayRequest:
+      type: object
+      required:
+        - topic
+        - from
+      properties:
+        topic:
+          type: string
+          description: Source topic filter
+        from:
+          type: string
+          format: date-time
+        to:
+          type: string
+          format: date-time
+        target_topic:
+          type: string
+          description: Optional different target topic
+        speed:
+          type: number
+          description: Replay speed multiplier (1.0 = real-time)
+          default: 1.0
+          minimum: 0.1
+          maximum: 100.0
+
+    ReplayStatus:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum: [running, completed, cancelled, failed]
+        messages_replayed:
+          type: integer
+        messages_total:
+          type: integer
+        started_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        error:
+          type: string
+          nullable: true
+
+    DLQMessage:
+      type: object
+      properties:
+        id:
+          type: string
+        original_topic:
+          type: string
+        payload:
+          type: string
+        qos:
+          type: integer
+        reason:
+          type: string
+          description: Reason for delivery failure
+        failed_at:
+          type: string
+          format: date-time
+        retry_count:
+          type: integer
+
+    Error:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string

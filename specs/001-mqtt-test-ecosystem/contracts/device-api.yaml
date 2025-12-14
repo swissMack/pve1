@@ -1,0 +1,430 @@
+openapi: 3.1.0
+info:
+  title: MQTT Test Ecosystem - Device API
+  description: |
+    Device management API for device registry and device twin/shadow operations.
+
+    **Base URL**: http://localhost:8080/api/v1/devices
+
+    ## Device Twin Topics (MQTT)
+
+    Devices interact with their twins via MQTT topics:
+    - `$devices/{deviceId}/twin/get` - Request current twin state
+    - `$devices/{deviceId}/twin/update` - Report device state
+    - `$devices/{deviceId}/twin/delta` - Receive desired state changes
+
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Device API Server
+
+tags:
+  - name: Registry
+    description: Device registry operations (FR-038)
+  - name: Twin
+    description: Device twin/shadow operations (FR-035, FR-036)
+  - name: Commands
+    description: Direct method invocation (FR-039)
+
+paths:
+  /devices:
+    get:
+      tags: [Registry]
+      summary: List devices
+      operationId: listDevices
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+        - name: status
+          in: query
+          description: Filter by connection status
+          schema:
+            type: string
+            enum: [online, offline]
+      responses:
+        '200':
+          description: List of devices
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Device'
+                  meta:
+                    $ref: '#/components/schemas/Pagination'
+
+    post:
+      tags: [Registry]
+      summary: Register device
+      operationId: createDevice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceCreate'
+      responses:
+        '201':
+          description: Device created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+        '409':
+          description: Device already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /devices/{deviceId}:
+    get:
+      tags: [Registry]
+      summary: Get device
+      operationId: getDevice
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      responses:
+        '200':
+          description: Device details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+        '404':
+          description: Device not found
+
+    patch:
+      tags: [Registry]
+      summary: Update device
+      operationId: updateDevice
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceUpdate'
+      responses:
+        '200':
+          description: Device updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+        '404':
+          description: Device not found
+
+    delete:
+      tags: [Registry]
+      summary: Delete device
+      operationId: deleteDevice
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      responses:
+        '204':
+          description: Device deleted
+        '404':
+          description: Device not found
+
+  /devices/{deviceId}/twin:
+    get:
+      tags: [Twin]
+      summary: Get device twin
+      description: Retrieve full device twin state (desired + reported)
+      operationId: getDeviceTwin
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      responses:
+        '200':
+          description: Device twin state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceTwin'
+        '404':
+          description: Device not found
+
+  /devices/{deviceId}/twin/desired:
+    patch:
+      tags: [Twin]
+      summary: Update desired state
+      description: |
+        Update the desired state of a device twin.
+        Triggers a delta notification to the device via MQTT.
+      operationId: updateDesiredState
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - name: If-Match
+          in: header
+          description: Version for optimistic concurrency (ETag)
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Partial desired state update (JSON merge patch)
+              additionalProperties: true
+      responses:
+        '200':
+          description: Desired state updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceTwin'
+        '404':
+          description: Device not found
+        '409':
+          description: Version conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /devices/{deviceId}/twin/reported:
+    get:
+      tags: [Twin]
+      summary: Get reported state
+      description: Retrieve only the reported state section
+      operationId: getReportedState
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      responses:
+        '200':
+          description: Reported state
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /devices/{deviceId}/commands/{commandName}:
+    post:
+      tags: [Commands]
+      summary: Invoke direct method
+      description: |
+        Invoke a direct method on a device (request/response pattern).
+        Uses MQTT request/response with correlation data.
+      operationId: invokeCommand
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - name: commandName
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: timeout
+          in: query
+          description: Response timeout in seconds
+          schema:
+            type: integer
+            default: 30
+            maximum: 300
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Command payload
+              additionalProperties: true
+      responses:
+        '200':
+          description: Command response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandResponse'
+        '404':
+          description: Device not found
+        '408':
+          description: Command timeout
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: Device offline
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /devices/bulk:
+    post:
+      tags: [Registry]
+      summary: Bulk import devices
+      operationId: bulkImportDevices
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                devices:
+                  type: array
+                  maxItems: 1000
+                  items:
+                    $ref: '#/components/schemas/DeviceCreate'
+      responses:
+        '200':
+          description: Import results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  created:
+                    type: integer
+                  failed:
+                    type: integer
+                  errors:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        device_id:
+                          type: string
+                        error:
+                          type: string
+
+components:
+  parameters:
+    DeviceId:
+      name: deviceId
+      in: path
+      required: true
+      description: Device identifier
+      schema:
+        type: string
+        pattern: '^[a-zA-Z0-9_-]{1,128}$'
+
+  schemas:
+    Device:
+      type: object
+      properties:
+        device_id:
+          type: string
+        status:
+          type: string
+          enum: [online, offline]
+        last_seen:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        attributes:
+          type: object
+          additionalProperties:
+            type: string
+          description: Custom device attributes
+
+    DeviceCreate:
+      type: object
+      required:
+        - device_id
+      properties:
+        device_id:
+          type: string
+          pattern: '^[a-zA-Z0-9_-]{1,128}$'
+        attributes:
+          type: object
+          additionalProperties:
+            type: string
+
+    DeviceUpdate:
+      type: object
+      properties:
+        attributes:
+          type: object
+          additionalProperties:
+            type: string
+
+    DeviceTwin:
+      type: object
+      properties:
+        device_id:
+          type: string
+        desired:
+          type: object
+          additionalProperties: true
+          description: Backend-set target state
+        reported:
+          type: object
+          additionalProperties: true
+          description: Device-reported current state
+        metadata:
+          type: object
+          properties:
+            desired:
+              type: object
+              additionalProperties:
+                type: object
+                properties:
+                  timestamp:
+                    type: string
+                    format: date-time
+            reported:
+              type: object
+              additionalProperties:
+                type: object
+                properties:
+                  timestamp:
+                    type: string
+                    format: date-time
+        version:
+          type: integer
+          description: Optimistic concurrency version
+        last_updated:
+          type: string
+          format: date-time
+
+    CommandResponse:
+      type: object
+      properties:
+        status:
+          type: integer
+          description: Response status code from device
+        payload:
+          type: object
+          additionalProperties: true
+          description: Response payload from device
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+
+    Error:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties: true

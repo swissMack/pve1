@@ -1,0 +1,365 @@
+openapi: 3.1.0
+info:
+  title: MQTT Test Ecosystem - Management API
+  description: |
+    Management API for the MQTT Test Ecosystem.
+    Provides client management, broker statistics, and system health.
+
+    **Base URL**: http://localhost:18083/api/v5
+  version: 1.0.0
+  contact:
+    name: MQTT Test Ecosystem
+
+servers:
+  - url: http://localhost:18083/api/v5
+    description: Local EMQX Management API
+
+tags:
+  - name: Clients
+    description: Connected client management
+  - name: Stats
+    description: Broker statistics and metrics
+  - name: Health
+    description: Health check endpoints
+
+paths:
+  /clients:
+    get:
+      tags: [Clients]
+      summary: List connected clients
+      description: Returns paginated list of currently connected MQTT clients
+      operationId: listClients
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+            maximum: 1000
+        - name: clientid
+          in: query
+          description: Filter by client ID (partial match)
+          schema:
+            type: string
+        - name: username
+          in: query
+          description: Filter by username
+          schema:
+            type: string
+        - name: ip_address
+          in: query
+          description: Filter by IP address
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of clients
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Client'
+                  meta:
+                    $ref: '#/components/schemas/Pagination'
+
+  /clients/{clientid}:
+    get:
+      tags: [Clients]
+      summary: Get client details
+      operationId: getClient
+      parameters:
+        - name: clientid
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Client details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Client'
+        '404':
+          description: Client not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      tags: [Clients]
+      summary: Disconnect client
+      description: Force disconnect a client by client ID
+      operationId: disconnectClient
+      parameters:
+        - name: clientid
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Client disconnected
+        '404':
+          description: Client not found
+
+  /clients/{clientid}/subscriptions:
+    get:
+      tags: [Clients]
+      summary: Get client subscriptions
+      operationId: getClientSubscriptions
+      parameters:
+        - name: clientid
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of subscriptions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Subscription'
+
+  /stats:
+    get:
+      tags: [Stats]
+      summary: Get broker statistics
+      operationId: getStats
+      responses:
+        '200':
+          description: Broker statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Stats'
+
+  /metrics:
+    get:
+      tags: [Stats]
+      summary: Get Prometheus metrics
+      operationId: getMetrics
+      responses:
+        '200':
+          description: Prometheus format metrics
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /health/live:
+    get:
+      tags: [Health]
+      summary: Liveness probe
+      description: Returns 200 if broker process is running
+      operationId: liveness
+      responses:
+        '200':
+          description: Broker is alive
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [ok]
+
+  /health/ready:
+    get:
+      tags: [Health]
+      summary: Readiness probe
+      description: Returns 200 if broker is ready to accept connections
+      operationId: readiness
+      responses:
+        '200':
+          description: Broker is ready
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [ok]
+        '503':
+          description: Broker not ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /publish:
+    post:
+      tags: [Stats]
+      summary: Publish message via HTTP
+      description: Publish an MQTT message via HTTP API (FR-011)
+      operationId: publishMessage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublishRequest'
+      responses:
+        '200':
+          description: Message published
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    Client:
+      type: object
+      properties:
+        clientid:
+          type: string
+          description: MQTT Client Identifier
+        username:
+          type: string
+          nullable: true
+        ip_address:
+          type: string
+        port:
+          type: integer
+        connected:
+          type: boolean
+        connected_at:
+          type: string
+          format: date-time
+        proto_name:
+          type: string
+          enum: [MQTT, MQTTv5]
+        proto_ver:
+          type: integer
+          enum: [4, 5]
+        keepalive:
+          type: integer
+        clean_start:
+          type: boolean
+        expiry_interval:
+          type: integer
+          description: Session expiry interval (MQTT 5.0)
+        subscriptions_cnt:
+          type: integer
+        inflight_cnt:
+          type: integer
+        mqueue_len:
+          type: integer
+          description: Queued message count
+
+    Subscription:
+      type: object
+      properties:
+        topic:
+          type: string
+        qos:
+          type: integer
+          enum: [0, 1, 2]
+        nl:
+          type: integer
+          description: No Local (MQTT 5.0)
+        rap:
+          type: integer
+          description: Retain as Published (MQTT 5.0)
+        rh:
+          type: integer
+          description: Retain Handling (MQTT 5.0)
+
+    Stats:
+      type: object
+      properties:
+        connections.count:
+          type: integer
+        connections.max:
+          type: integer
+        sessions.count:
+          type: integer
+        subscriptions.count:
+          type: integer
+        topics.count:
+          type: integer
+        retained.count:
+          type: integer
+        messages.received:
+          type: integer
+        messages.sent:
+          type: integer
+        messages.dropped:
+          type: integer
+
+    PublishRequest:
+      type: object
+      required:
+        - topic
+        - payload
+      properties:
+        topic:
+          type: string
+          maxLength: 65535
+        payload:
+          type: string
+          description: Base64 encoded payload
+        qos:
+          type: integer
+          enum: [0, 1, 2]
+          default: 0
+        retain:
+          type: boolean
+          default: false
+        properties:
+          type: object
+          description: MQTT 5.0 properties
+          properties:
+            message_expiry_interval:
+              type: integer
+            content_type:
+              type: string
+            response_topic:
+              type: string
+            correlation_data:
+              type: string
+            user_properties:
+              type: object
+              additionalProperties:
+                type: string
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        count:
+          type: integer
+        hasnext:
+          type: boolean
+
+    Error:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string

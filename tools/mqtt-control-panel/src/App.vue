@@ -87,6 +87,20 @@ onMounted(() => {
           <i class="pi pi-server"></i>
           MQTT Control Panel
         </h1>
+        <nav class="service-tabs">
+          <a href="http://192.168.1.199:3000" target="_blank" class="service-tab" title="Grafana Dashboard">
+            <i class="pi pi-chart-line"></i>
+            <span>Grafana</span>
+          </a>
+          <a href="http://192.168.1.199:8086" target="_blank" class="service-tab" title="InfluxDB">
+            <i class="pi pi-database"></i>
+            <span>InfluxDB</span>
+          </a>
+          <a href="http://192.168.1.199:18083" target="_blank" class="service-tab" title="EMQX Dashboard">
+            <i class="pi pi-sitemap"></i>
+            <span>EMQX</span>
+          </a>
+        </nav>
       </div>
       <div class="header-right">
         <Tag v-if="error" :value="error" severity="danger" />
@@ -201,17 +215,54 @@ body {
   z-index: 100;
 }
 
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+}
+
 .header-left h1 {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   font-weight: 600;
   color: #fff;
+  white-space: nowrap;
 }
 
 .header-left h1 i {
   color: #4fc3f7;
+}
+
+.service-tabs {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.service-tab {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.75rem;
+  background: rgba(79, 195, 247, 0.1);
+  border: 1px solid rgba(79, 195, 247, 0.3);
+  border-radius: 6px;
+  color: #4fc3f7;
+  text-decoration: none;
+  font-size: 0.8rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.service-tab:hover {
+  background: rgba(79, 195, 247, 0.2);
+  border-color: #4fc3f7;
+  transform: translateY(-1px);
+}
+
+.service-tab i {
+  font-size: 0.9rem;
 }
 
 .header-right {

@@ -333,7 +333,7 @@ function formatInterval(seconds) {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.75rem 1rem;
+  padding: 0.5rem 0.75rem;
   background: #2a2a3e;
   border-bottom: 1px solid #3a3a50;
 }
@@ -341,56 +341,59 @@ function formatInterval(seconds) {
 .device-info {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.5rem;
 }
 
 .device-id {
   font-weight: 700;
-  font-size: 1.1rem;
+  font-size: 0.95rem;
   color: #fff;
 }
 
 .sensor-controls {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.4rem;
 }
 
 .control-row {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.15rem;
 }
 
 .control-label {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.875rem;
+  gap: 0.35rem;
+  font-size: 0.75rem;
   color: var(--p-text-muted-color);
 }
 
 .control-label i {
-  width: 1rem;
+  width: 0.85rem;
+  font-size: 0.85rem;
 }
 
 .current-value {
   margin-left: auto;
   font-weight: 600;
+  font-size: 0.75rem;
   color: var(--p-primary-color);
 }
 
 .interval-value {
   color: #f59e0b;
   background: rgba(245, 158, 11, 0.1);
-  padding: 0.125rem 0.5rem;
-  border-radius: 4px;
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+  font-size: 0.7rem;
 }
 
 .control-input {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.35rem;
 }
 
 .flex-grow {
@@ -398,59 +401,84 @@ function formatInterval(seconds) {
 }
 
 .value-input {
-  width: 100px;
+  width: 75px;
 }
 
 .value-input :deep(.p-inputnumber-input) {
   width: 100%;
   text-align: right;
-  padding: 0.25rem 0.5rem;
+  padding: 0.2rem 0.35rem;
+  font-size: 0.75rem;
 }
 
 .location-inputs {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.35rem;
   align-items: center;
 }
 
 .coord-input {
-  width: 110px;
+  width: 90px;
 }
 
 .coord-input :deep(.p-inputnumber-input) {
   width: 100%;
-  padding: 0.25rem 0.5rem;
+  padding: 0.2rem 0.35rem;
+  font-size: 0.75rem;
 }
 
 .status-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 1rem;
-  padding-top: 0.75rem;
+  margin-top: 0.5rem;
+  padding-top: 0.4rem;
   border-top: 1px solid var(--p-surface-200);
-  font-size: 0.8rem;
+  font-size: 0.7rem;
   color: var(--p-text-muted-color);
 }
 
 .signal {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.2rem;
 }
 
 .card-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.35rem;
   justify-content: flex-end;
 }
 
 :deep(.p-card-body) {
-  padding: 1rem;
+  padding: 0.6rem 0.75rem;
 }
 
 :deep(.p-card-footer) {
-  padding: 0.75rem 1rem;
+  padding: 0.4rem 0.75rem;
   border-top: 1px solid var(--p-surface-200);
+}
+
+:deep(.p-slider) {
+  height: 0.35rem;
+}
+
+:deep(.p-slider .p-slider-handle) {
+  width: 0.85rem;
+  height: 0.85rem;
+}
+
+:deep(.p-tag) {
+  font-size: 0.65rem;
+  padding: 0.15rem 0.35rem;
+}
+
+:deep(.p-button.p-button-sm) {
+  padding: 0.3rem 0.5rem;
+  font-size: 0.75rem;
+}
+
+:deep(.p-divider) {
+  margin: 0.4rem 0;
 }
 </style>

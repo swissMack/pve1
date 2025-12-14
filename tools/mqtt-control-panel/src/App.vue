@@ -95,15 +95,15 @@ onMounted(() => {
             <i class="pi pi-info-circle"></i>
             <span>Info</span>
           </button>
-          <a href="http://192.168.1.199:3000/dashboards" target="_blank" class="service-tab" title="Grafana Dashboards (admin/admin)">
+          <a href="http://192.168.1.199:3000/dashboards" target="_blank" class="service-tab auto-login" title="Grafana Dashboards (no login required)">
             <i class="pi pi-chart-line"></i>
             <span>Grafana</span>
           </a>
-          <a href="http://192.168.1.199:8086" target="_blank" class="service-tab" title="InfluxDB Data Explorer (admin/adminpassword)">
+          <a href="http://192.168.1.199:8086" target="_blank" class="service-tab" title="InfluxDB (admin/adminpassword)">
             <i class="pi pi-database"></i>
             <span>InfluxDB</span>
           </a>
-          <a href="http://192.168.1.199:18083/#/clients" target="_blank" class="service-tab" title="EMQX Connected Clients (admin/public)">
+          <a href="http://192.168.1.199:18083/#/clients" target="_blank" class="service-tab" title="EMQX Dashboard (admin/public)">
             <i class="pi pi-sitemap"></i>
             <span>EMQX</span>
           </a>
@@ -296,16 +296,12 @@ onMounted(() => {
           <h3><i class="pi pi-cog"></i> Services & Credentials</h3>
           <div class="services-grid">
             <div class="service-card">
-              <h4><i class="pi pi-sitemap"></i> EMQX Broker</h4>
-              <p>MQTT 5.0 broker handling all pub/sub messaging</p>
-              <div class="credentials">
-                <span class="cred-label">Login:</span>
-                <span class="cred-value">admin / public</span>
-              </div>
-              <code>mqtt://192.168.1.199:1883</code>
-              <code>ws://192.168.1.199:8083/mqtt</code>
-              <a href="http://192.168.1.199:18083/#/clients" target="_blank" class="service-link">
-                <i class="pi pi-external-link"></i> Open Dashboard
+              <h4><i class="pi pi-chart-line"></i> Grafana</h4>
+              <Tag value="No Login Required" severity="success" class="auto-tag" />
+              <p>Visualization and alerting platform</p>
+              <code>http://192.168.1.199:3000</code>
+              <a href="http://192.168.1.199:3000/dashboards" target="_blank" class="service-link auto">
+                <i class="pi pi-external-link"></i> Open Dashboards
               </a>
             </div>
             <div class="service-card">
@@ -324,20 +320,21 @@ onMounted(() => {
                 <span class="cred-value">mqtt_messages</span>
               </div>
               <code>http://192.168.1.199:8086</code>
-              <a href="http://192.168.1.199:8086/orgs/mqtt-org/data-explorer" target="_blank" class="service-link">
+              <a href="http://192.168.1.199:8086" target="_blank" class="service-link">
                 <i class="pi pi-external-link"></i> Open Data Explorer
               </a>
             </div>
             <div class="service-card">
-              <h4><i class="pi pi-chart-line"></i> Grafana</h4>
-              <p>Visualization and alerting platform</p>
+              <h4><i class="pi pi-sitemap"></i> EMQX Broker</h4>
+              <p>MQTT 5.0 broker handling all pub/sub messaging</p>
               <div class="credentials">
                 <span class="cred-label">Login:</span>
-                <span class="cred-value">admin / admin</span>
+                <span class="cred-value">admin / public</span>
               </div>
-              <code>http://192.168.1.199:3000</code>
-              <a href="http://192.168.1.199:3000/dashboards" target="_blank" class="service-link">
-                <i class="pi pi-external-link"></i> Open Dashboards
+              <code>mqtt://192.168.1.199:1883</code>
+              <code>ws://192.168.1.199:8083/mqtt</code>
+              <a href="http://192.168.1.199:18083/#/clients" target="_blank" class="service-link">
+                <i class="pi pi-external-link"></i> Open Dashboard
               </a>
             </div>
           </div>
@@ -607,6 +604,32 @@ body {
   background: rgba(79, 195, 247, 0.25);
   border-color: #4fc3f7;
   transform: translateY(-1px);
+}
+
+.service-link.auto {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.4);
+  color: #10b981;
+}
+
+.service-link.auto:hover {
+  background: rgba(16, 185, 129, 0.25);
+  border-color: #10b981;
+}
+
+.auto-tag {
+  margin-bottom: 0.5rem;
+}
+
+.service-tab.auto-login {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.4);
+  color: #10b981;
+}
+
+.service-tab.auto-login:hover {
+  background: rgba(16, 185, 129, 0.25);
+  border-color: #10b981;
 }
 
 .header-right {

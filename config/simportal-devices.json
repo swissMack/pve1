@@ -1,0 +1,152 @@
+{
+  "description": "SIM Card Portal device configuration for MQTT test data generation",
+  "version": "1.0.0",
+  "topic_prefix": "simportal/devices",
+  "devices": [
+    {
+      "device_id": "DEV001",
+      "name": "IoT Sensor Alpha",
+      "type": "iot_sensor",
+      "has_sensors": true,
+      "has_location": false,
+      "location_static": {
+        "latitude": 47.3769,
+        "longitude": 8.5417
+      },
+      "sensor_ranges": {
+        "temperature": { "min": 18, "max": 28, "unit": "celsius" },
+        "humidity": { "min": 40, "max": 70, "unit": "percent" },
+        "light": { "min": 200, "max": 800, "unit": "lux" },
+        "battery": { "min": 70, "max": 100, "unit": "percent" }
+      }
+    },
+    {
+      "device_id": "DEV002",
+      "name": "Smart Gateway Beta",
+      "type": "gateway",
+      "has_sensors": true,
+      "has_location": false,
+      "location_static": {
+        "latitude": 47.3774,
+        "longitude": 8.5392
+      },
+      "sensor_ranges": {
+        "temperature": { "min": 20, "max": 35, "unit": "celsius" },
+        "humidity": { "min": 30, "max": 60, "unit": "percent" },
+        "light": { "min": 100, "max": 500, "unit": "lux" },
+        "battery": { "min": 85, "max": 100, "unit": "percent" }
+      }
+    },
+    {
+      "device_id": "DEV003",
+      "name": "Vehicle Tracker Gamma",
+      "type": "vehicle_tracker",
+      "has_sensors": true,
+      "has_location": true,
+      "location_mobile": {
+        "center_latitude": 47.3769,
+        "center_longitude": 8.5417,
+        "radius_km": 5,
+        "speed_range": { "min": 0, "max": 120 }
+      },
+      "sensor_ranges": {
+        "temperature": { "min": -10, "max": 45, "unit": "celsius" },
+        "humidity": { "min": 20, "max": 80, "unit": "percent" },
+        "light": { "min": 0, "max": 1000, "unit": "lux" },
+        "battery": { "min": 50, "max": 100, "unit": "percent" }
+      }
+    },
+    {
+      "device_id": "DEV004",
+      "name": "Security Camera Delta",
+      "type": "camera",
+      "has_sensors": true,
+      "has_location": false,
+      "location_static": {
+        "latitude": 47.3782,
+        "longitude": 8.5401
+      },
+      "sensor_ranges": {
+        "temperature": { "min": 15, "max": 40, "unit": "celsius" },
+        "humidity": { "min": 25, "max": 75, "unit": "percent" },
+        "light": { "min": 0, "max": 2000, "unit": "lux" },
+        "battery": { "min": 90, "max": 100, "unit": "percent" }
+      }
+    },
+    {
+      "device_id": "DEV005",
+      "name": "Environmental Monitor Epsilon",
+      "type": "environmental_sensor",
+      "has_sensors": true,
+      "has_location": false,
+      "location_static": {
+        "latitude": 47.3755,
+        "longitude": 8.5445
+      },
+      "sensor_ranges": {
+        "temperature": { "min": -20, "max": 50, "unit": "celsius" },
+        "humidity": { "min": 10, "max": 95, "unit": "percent" },
+        "light": { "min": 0, "max": 100000, "unit": "lux" },
+        "battery": { "min": 60, "max": 100, "unit": "percent" }
+      }
+    },
+    {
+      "device_id": "DEV006",
+      "name": "Smart Meter Zeta",
+      "type": "smart_meter",
+      "has_sensors": true,
+      "has_location": false,
+      "location_static": {
+        "latitude": 47.3790,
+        "longitude": 8.5380
+      },
+      "sensor_ranges": {
+        "temperature": { "min": 10, "max": 35, "unit": "celsius" },
+        "humidity": { "min": 30, "max": 70, "unit": "percent" },
+        "light": { "min": 50, "max": 300, "unit": "lux" },
+        "battery": { "min": 80, "max": 100, "unit": "percent" }
+      }
+    },
+    {
+      "device_id": "DEV007",
+      "name": "Asset Tracker Eta",
+      "type": "asset_tracker",
+      "has_sensors": true,
+      "has_location": true,
+      "location_mobile": {
+        "center_latitude": 47.3800,
+        "center_longitude": 8.5350,
+        "radius_km": 10,
+        "speed_range": { "min": 0, "max": 80 }
+      },
+      "sensor_ranges": {
+        "temperature": { "min": -5, "max": 40, "unit": "celsius" },
+        "humidity": { "min": 15, "max": 85, "unit": "percent" },
+        "light": { "min": 0, "max": 500, "unit": "lux" },
+        "battery": { "min": 40, "max": 100, "unit": "percent" }
+      }
+    },
+    {
+      "device_id": "DEV008",
+      "name": "Industrial Controller Theta",
+      "type": "industrial_controller",
+      "has_sensors": true,
+      "has_location": false,
+      "location_static": {
+        "latitude": 47.3745,
+        "longitude": 8.5460
+      },
+      "sensor_ranges": {
+        "temperature": { "min": 25, "max": 60, "unit": "celsius" },
+        "humidity": { "min": 20, "max": 50, "unit": "percent" },
+        "light": { "min": 100, "max": 400, "unit": "lux" },
+        "battery": { "min": 95, "max": 100, "unit": "percent" }
+      }
+    }
+  ],
+  "generation_settings": {
+    "sensor_interval_seconds": 10,
+    "location_interval_seconds": 5,
+    "signal_strength_range": { "min": 50, "max": 100 }
+  }
+}

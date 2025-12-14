@@ -1,0 +1,93 @@
+{
+  "name": "simportal_influxdb",
+  "description": "Write SIM Card Portal telemetry to InfluxDB",
+  "enabled": true,
+  "bridge": {
+    "name": "simportal_influxdb_bridge",
+    "type": "influxdb_api_v2",
+    "connector": {
+      "server": "${INFLUXDB_URL:-http://influxdb:8086}",
+      "org": "${INFLUXDB_ORG:-mqtt-org}",
+      "bucket": "${INFLUXDB_TELEMETRY_BUCKET:-telemetry}",
+      "token": "${INFLUXDB_TOKEN:-mqtt-influxdb-token}",
+      "precision": "ms"
+    },
+    "resource_opts": {
+      "worker_pool_size": 4,
+      "health_check_interval": "15s",
+      "query_mode": "async",
+      "batch_size": 100,
+      "batch_time": "1s"
+    }
+  },
+  "rules": [
+    {
+      "name": "simportal_sensors",
+      "description": "Store SIM Portal sensor readings in InfluxDB",
+      "sql": "SELECT payload.deviceId as device_id, payload.sensors.temperature as temperature, payload.sensors.humidity as humidity, payload.sensors.light as light, payload.sensors.batteryLevel as battery, payload.metadata.signalStrength as signal FROM \"simportal/devices/+/sensors\"",
+      "actions": [
+        {
+          "function": "influxdb_write",
+          "args": {
+            "bridge": "simportal_influxdb_bridge",
+            "data": {
+              "measurement": "simportal_sensors",
+              "tags": {
+                "device_id": "${device_id}"
+              },
+              "fields": {
+                "temperature": "${temperature}",
+                "humidity": "${humidity}",
+                "light": "${light}",
+                "battery": "${battery}",
+                "signal": "${signal}"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "simportal_location",
+      "description": "Store SIM Portal GPS location in InfluxDB",
+      "sql": "SELECT payload.deviceId as device_id, payload.location.latitude as lat, payload.location.longitude as lon, payload.location.altitude as altitude, payload.location.speed as speed, payload.location.heading as heading FROM \"simportal/devices/+/location\"",
+      "actions": [
+        {
+          "function": "influxdb_write",
+          "args": {
+            "bridge": "simportal_influxdb_bridge",
+            "data": {
+              "measurement": "simportal_location",
+              "tags": {
+                "device_id": "${device_id}"
+              },
+              "fields": {
+                "latitude": "${lat}",
+                "longitude": "${lon}",
+                "altitude": "${altitude}",
+                "speed": "${speed}",
+                "heading": "${heading}"
+              }
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "dashboards": {
+    "suggested_queries": [
+      {
+        "name": "SIM Portal - Temperature by device",
+        "query": "from(bucket: \"telemetry\") |> range(start: -1h) |> filter(fn: (r) => r._measurement == \"simportal_sensors\") |> filter(fn: (r) => r._field == \"temperature\")"
+      },
+      {
+        "name": "SIM Portal - Device locations",
+        "query": "from(bucket: \"telemetry\") |> range(start: -1h) |> filter(fn: (r) => r._measurement == \"simportal_location\") |> filter(fn: (r) => r._field == \"latitude\" or r._field == \"longitude\")"
+      },
+      {
+        "name": "SIM Portal - Battery levels",
+        "query": "from(bucket: \"telemetry\") |> range(start: -1h) |> filter(fn: (r) => r._measurement == \"simportal_sensors\") |> filter(fn: (r) => r._field == \"battery\") |> aggregateWindow(every: 5m, fn: mean)"
+      }
+    ]
+  }
+}

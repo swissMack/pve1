@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch } from 'vue'
+import { ref } from 'vue'
 import Panel from 'primevue/panel'
 import Slider from 'primevue/slider'
 import InputNumber from 'primevue/inputnumber'
@@ -9,27 +9,18 @@ const props = defineProps({
   connected: Boolean
 })
 
-const emit = defineEmits(['update-intervals'])
+const emit = defineEmits(['update-location-interval'])
 
-const sensorInterval = ref(10)
 const locationInterval = ref(5)
 
-function applyIntervals() {
-  emit('update-intervals', sensorInterval.value, locationInterval.value)
+function applyLocationInterval() {
+  emit('update-location-interval', locationInterval.value)
 }
 </script>
 
 <template>
   <Panel header="Global Settings" class="global-settings">
     <div class="settings-grid">
-      <div class="setting-item">
-        <label>Sensor Interval (seconds)</label>
-        <div class="slider-group">
-          <Slider v-model="sensorInterval" :min="1" :max="60" :step="1" class="flex-1" />
-          <InputNumber v-model="sensorInterval" :min="1" :max="60" :showButtons="false" class="interval-input" />
-        </div>
-      </div>
-
       <div class="setting-item">
         <label>Location Interval (seconds)</label>
         <div class="slider-group">
@@ -38,12 +29,12 @@ function applyIntervals() {
         </div>
       </div>
 
-      <div class="setting-item">
+      <div class="setting-item button-item">
         <Button
-          label="Apply Intervals"
+          label="Apply"
           icon="pi pi-check"
           :disabled="!connected"
-          @click="applyIntervals"
+          @click="applyLocationInterval"
           severity="success"
         />
       </div>
@@ -73,6 +64,11 @@ function applyIntervals() {
   margin-bottom: 0.5rem;
   font-weight: 500;
   color: var(--p-text-color);
+}
+
+.button-item {
+  flex: 0;
+  min-width: auto;
 }
 
 .slider-group {

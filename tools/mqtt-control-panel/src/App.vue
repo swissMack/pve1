@@ -22,7 +22,7 @@ const {
   resumeDevice,
   resetDevice,
   setDeviceSensorInterval,
-  setIntervals
+  setLocationInterval
 } = useMqtt()
 
 // Mobile devices (have location tracking)
@@ -69,8 +69,8 @@ function handleSetSensorInterval(deviceId, intervalSeconds) {
   setDeviceSensorInterval(deviceId, intervalSeconds)
 }
 
-function handleUpdateIntervals(sensorInterval, locationInterval) {
-  setIntervals(sensorInterval, locationInterval)
+function handleUpdateLocationInterval(locationInterval) {
+  setLocationInterval(locationInterval)
 }
 
 onMounted(() => {
@@ -133,7 +133,7 @@ onMounted(() => {
       <!-- Global Settings -->
       <GlobalSettings
         :connected="connected"
-        @update-intervals="handleUpdateIntervals"
+        @update-location-interval="handleUpdateLocationInterval"
       />
 
       <!-- Device Grid -->

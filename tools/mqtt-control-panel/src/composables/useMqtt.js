@@ -168,10 +168,9 @@ export function useMqtt(brokerUrl = 'ws://192.168.1.199:8083/mqtt') {
     return success
   }
 
-  function setIntervals(sensorInterval, locationInterval) {
+  function setLocationInterval(locationInterval) {
     return sendConfigCommand({
       type: 'set_interval',
-      sensor_interval: sensorInterval,
       location_interval: locationInterval
     })
   }
@@ -198,6 +197,6 @@ export function useMqtt(brokerUrl = 'ws://192.168.1.199:8083/mqtt') {
     resumeDevice,
     resetDevice,
     setDeviceSensorInterval,
-    setIntervals
+    setLocationInterval
   }
 }

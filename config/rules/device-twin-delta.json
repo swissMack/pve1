@@ -1,0 +1,58 @@
+{
+  "name": "device_twin_delta",
+  "description": "Calculate and publish delta between desired and reported states",
+  "enabled": true,
+  "sql": "SELECT clientid, payload as desired_state FROM \"$devices/+/twin/desired\"",
+  "actions": [
+    {
+      "name": "calculate_and_publish_delta",
+      "function": "republish",
+      "args": {
+        "topic": "$devices/${clientid}/twin/update/delta",
+        "qos": 1,
+        "retain": false,
+        "payload": "{\"state\": ${payload}, \"metadata\": {\"timestamp\": \"${timestamp}\"}}"
+      }
+    }
+  ],
+  "trigger_conditions": {
+    "description": "Delta is published when desired state changes",
+    "notes": [
+      "For full delta calculation (desired - reported), implement in backend service",
+      "This simplified rule publishes the new desired state as delta",
+      "Production systems should compare desired vs reported and only send differences"
+    ]
+  },
+  "advanced_implementation": {
+    "description": "Full delta calculation using external service",
+    "sql": "SELECT clientid, payload as new_desired, $retained(concat('$devices/', clientid, '/twin/reported')) as current_reported FROM \"$devices/+/twin/desired\"",
+    "webhook_action": {
+      "url": "http://backend:8080/api/devices/${clientid}/twin/delta",
+      "method": "POST",
+      "body": {
+        "desired": "${new_desired}",
+        "reported": "${current_reported}",
+        "device_id": "${clientid}"
+      }
+    }
+  },
+  "delta_format": {
+    "description": "Standard delta message format",
+    "example": {
+      "state": {
+        "temperature_setpoint": 25,
+        "mode": "cooling"
+      },
+      "metadata": {
+        "timestamp": "2024-01-15T10:30:00Z"
+      },
+      "version": 5
+    }
+  },
+  "notes": {
+    "topic_trigger": "$devices/+/twin/desired",
+    "topic_output": "$devices/{clientid}/twin/update/delta",
+    "delivery": "QoS 1 for reliable delivery",
+    "offline_devices": "Uses EMQX session persistence for offline delivery"
+  }
+}

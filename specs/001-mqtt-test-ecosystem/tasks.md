@@ -146,19 +146,19 @@ This is a **multi-container infrastructure project**. Paths:
 
 ### Tests for User Story 4
 
-- [ ] T050 [P] [US4] Create tests/integration/test_message_storage.sh (publish, verify in InfluxDB)
-- [ ] T051 [P] [US4] Create tests/integration/test_message_history_query.sh (query by time range, topic)
-- [ ] T052 [P] [US4] Create tests/integration/test_message_replay.sh (replay historical messages)
-- [ ] T053 [P] [US4] Create tests/integration/test_message_ttl.sh (expiry enforcement)
+- [x] T050 [P] [US4] Create tests/integration/test_message_storage.sh (publish, verify in InfluxDB)
+- [x] T051 [P] [US4] Create tests/integration/test_message_history_query.sh (query by time range, topic)
+- [x] T052 [P] [US4] Create tests/integration/test_message_replay.sh (replay historical messages)
+- [x] T053 [P] [US4] Create tests/integration/test_message_ttl.sh (expiry enforcement)
 
 ### Implementation for User Story 4
 
-- [ ] T054 [US4] Create EMQX rule for message storage in config/rules/message-to-influxdb.json
-- [ ] T055 [US4] Configure InfluxDB data bridge in docker/services/emqx/emqx.conf
-- [ ] T056 [US4] Create docker/services/influxdb/init-scripts/create-buckets.sh for mqtt_messages bucket
-- [ ] T057 [US4] Configure retention policies (12h, 24h, 48h, 7d) in InfluxDB init script
-- [ ] T058 [US4] Create scripts/replay-messages.sh for message replay functionality
-- [ ] T059 [US4] Create config/rules/dead-letter-queue.json for undeliverable messages
+- [x] T054 [US4] Create EMQX rule for message storage in config/rules/message-to-influxdb.json
+- [x] T055 [US4] Configure InfluxDB data bridge in docker/services/emqx/emqx.conf
+- [x] T056 [US4] Create docker/services/influxdb/init-scripts/create-buckets.sh for mqtt_messages bucket
+- [x] T057 [US4] Configure retention policies (12h, 24h, 48h, 7d) in InfluxDB init script
+- [x] T058 [US4] Create scripts/replay-messages.sh for message replay functionality
+- [x] T059 [US4] Create config/rules/dead-letter-queue.json for undeliverable messages
 - [ ] T060 [US4] Run and verify all US4 tests pass
 
 **Checkpoint**: User Story 4 complete - message persistence and replay working
@@ -173,19 +173,19 @@ This is a **multi-container infrastructure project**. Paths:
 
 ### Tests for User Story 5
 
-- [ ] T061 [P] [US5] Create tests/integration/test_device_registry.sh (CRUD operations via API)
-- [ ] T062 [P] [US5] Create tests/integration/test_device_twin_desired.sh (update desired, receive delta)
-- [ ] T063 [P] [US5] Create tests/integration/test_device_twin_reported.sh (report state, query twin)
-- [ ] T064 [P] [US5] Create tests/integration/test_device_twin_offline.sh (delta delivery on reconnect)
+- [x] T061 [P] [US5] Create tests/integration/test_device_registry.sh (CRUD operations via API)
+- [x] T062 [P] [US5] Create tests/integration/test_device_twin_desired.sh (update desired, receive delta)
+- [x] T063 [P] [US5] Create tests/integration/test_device_twin_reported.sh (report state, query twin)
+- [x] T064 [P] [US5] Create tests/integration/test_device_twin_offline.sh (delta delivery on reconnect)
 
 ### Implementation for User Story 5
 
-- [ ] T065 [US5] Create config/rules/device-twin-get.json (handle $devices/+/twin/get requests)
-- [ ] T066 [US5] Create config/rules/device-twin-update.json (handle $devices/+/twin/update reports)
-- [ ] T067 [US5] Create config/rules/device-twin-delta.json (publish delta on desired changes)
-- [ ] T068 [US5] Create config/devices.json with seed device registry data
-- [ ] T069 [US5] Create scripts/seed-devices.sh to initialize device registry
-- [ ] T070 [US5] Configure device status tracking (online/offline/last_seen) in EMQX rules
+- [x] T065 [US5] Create config/rules/device-twin-get.json (handle $devices/+/twin/get requests)
+- [x] T066 [US5] Create config/rules/device-twin-update.json (handle $devices/+/twin/update reports)
+- [x] T067 [US5] Create config/rules/device-twin-delta.json (publish delta on desired changes)
+- [x] T068 [US5] Create config/devices.json with seed device registry data
+- [x] T069 [US5] Create scripts/seed-devices.sh to initialize device registry
+- [x] T070 [US5] Configure device status tracking (online/offline/last_seen) in EMQX rules
 - [ ] T071 [US5] Run and verify all US5 tests pass
 
 **Checkpoint**: User Story 5 complete - device twin functionality operational
@@ -200,18 +200,18 @@ This is a **multi-container infrastructure project**. Paths:
 
 ### Tests for User Story 6
 
-- [ ] T072 [P] [US6] Create tests/integration/test_rules_topic_match.sh (rule triggers on topic pattern)
-- [ ] T073 [P] [US6] Create tests/integration/test_rules_webhook.sh (HTTP webhook delivery)
-- [ ] T074 [P] [US6] Create tests/integration/test_rules_republish.sh (message transformation and republish)
-- [ ] T075 [P] [US6] Create tests/integration/test_rules_filter.sh (SQL-like WHERE conditions)
+- [x] T072 [P] [US6] Create tests/integration/test_rules_topic_match.sh (rule triggers on topic pattern)
+- [x] T073 [P] [US6] Create tests/integration/test_rules_webhook.sh (HTTP webhook delivery)
+- [x] T074 [P] [US6] Create tests/integration/test_rules_republish.sh (message transformation and republish)
+- [x] T075 [P] [US6] Create tests/integration/test_rules_filter.sh (SQL-like WHERE conditions)
 
 ### Implementation for User Story 6
 
-- [ ] T076 [US6] Create config/rules/webhook-example.json (HTTP POST action configuration)
-- [ ] T077 [US6] Create config/rules/republish-example.json (topic transformation rule)
-- [ ] T078 [US6] Create config/rules/influxdb-telemetry.json (write telemetry to InfluxDB)
-- [ ] T079 [US6] Configure webhook retry policy in EMQX rules (3 retries, 1s interval)
-- [ ] T080 [US6] Create tests/fixtures/webhook-server.py (mock webhook for testing)
+- [x] T076 [US6] Create config/rules/webhook-example.json (HTTP POST action configuration)
+- [x] T077 [US6] Create config/rules/republish-example.json (topic transformation rule)
+- [x] T078 [US6] Create config/rules/influxdb-telemetry.json (write telemetry to InfluxDB)
+- [x] T079 [US6] Configure webhook retry policy in EMQX rules (3 retries, 1s interval)
+- [x] T080 [US6] Create tests/fixtures/webhook-server.py (mock webhook for testing)
 - [ ] T081 [US6] Run and verify all US6 tests pass
 
 **Checkpoint**: User Story 6 complete - rules engine operational
@@ -222,14 +222,14 @@ This is a **multi-container infrastructure project**. Paths:
 
 **Purpose**: Final validation, documentation, and cleanup
 
-- [ ] T082 [P] Create README.md with project overview and quickstart link
-- [ ] T083 [P] Validate quickstart.md steps work end-to-end
-- [ ] T084 [P] Create tests/load/k6-connection-test.js for 10K connection test (SC-002)
-- [ ] T085 [P] Create tests/load/k6-throughput-test.js for message throughput test (SC-003, SC-004)
+- [x] T082 [P] Create README.md with project overview and quickstart link
+- [x] T083 [P] Validate quickstart.md steps work end-to-end
+- [x] T084 [P] Create tests/load/k6-connection-test.js for 10K connection test (SC-002)
+- [x] T085 [P] Create tests/load/k6-throughput-test.js for message throughput test (SC-003, SC-004)
 - [ ] T086 Run full integration test suite (all tests/integration/*.sh)
 - [ ] T087 Verify startup time < 10 seconds (SC-011)
-- [ ] T088 Document all environment variables in docker/.env.example
-- [ ] T089 Final cleanup: remove debug configs, verify production defaults
+- [x] T088 Document all environment variables in docker/.env.example
+- [x] T089 Final cleanup: remove debug configs, verify production defaults
 
 ---
 

@@ -1,0 +1,42 @@
+{
+  "name": "dead-letter-queue",
+  "description": "Store undeliverable messages for later analysis",
+  "enabled": true,
+  "sql": "SELECT * FROM \"$events/message_dropped\"",
+  "actions": [
+    {
+      "function": "influxdb_write",
+      "args": {
+        "connector": "influxdb-connector",
+        "bucket": "dead_letter_queue",
+        "measurement": "dropped_messages",
+        "tags": {
+          "topic": "${topic}",
+          "reason": "${reason}",
+          "client_id": "${clientid}",
+          "node": "${node}"
+        },
+        "fields": {
+          "payload": "${payload}",
+          "qos": "${qos}",
+          "from_clientid": "${from_clientid}",
+          "from_username": "${from_username}"
+        },
+        "timestamp": "${timestamp}"
+      }
+    },
+    {
+      "function": "console",
+      "args": {
+        "level": "warning",
+        "template": "Message dropped: topic=${topic}, reason=${reason}, from=${from_clientid}"
+      }
+    }
+  ],
+  "notes": [
+    "Captures messages that couldn't be delivered",
+    "Reasons: no_subscribers, queue_full, expired, etc.",
+    "7-day retention for analysis",
+    "Also logs to console for immediate visibility"
+  ]
+}

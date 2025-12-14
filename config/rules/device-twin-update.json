@@ -1,0 +1,70 @@
+{
+  "name": "device_twin_update",
+  "description": "Handle device twin UPDATE requests - updates reported or desired state",
+  "enabled": true,
+  "sql": "SELECT clientid, topic, payload, payload.state.reported as reported_state, payload.state.desired as desired_state FROM \"$devices/+/twin/update\"",
+  "actions": [
+    {
+      "name": "update_reported_state",
+      "function": "republish",
+      "args": {
+        "topic": "$devices/${clientid}/twin/reported",
+        "qos": 1,
+        "retain": true,
+        "payload": "${reported_state}",
+        "condition": "reported_state != null"
+      }
+    },
+    {
+      "name": "update_desired_state",
+      "function": "republish",
+      "args": {
+        "topic": "$devices/${clientid}/twin/desired",
+        "qos": 1,
+        "retain": true,
+        "payload": "${desired_state}",
+        "condition": "desired_state != null"
+      }
+    },
+    {
+      "name": "confirm_update",
+      "function": "republish",
+      "args": {
+        "topic": "$devices/${clientid}/twin/update/accepted",
+        "qos": 1,
+        "retain": false,
+        "payload": "{\"status\": \"accepted\", \"timestamp\": \"${timestamp}\", \"version\": ${payload.version + 1}}"
+      }
+    },
+    {
+      "name": "store_to_influxdb",
+      "function": "influxdb_write",
+      "args": {
+        "bucket": "device_twins",
+        "measurement": "twin_updates",
+        "tags": {
+          "device_id": "${clientid}",
+          "update_type": "twin"
+        },
+        "fields": {
+          "reported": "${json_encode(reported_state)}",
+          "desired": "${json_encode(desired_state)}"
+        }
+      }
+    }
+  ],
+  "notes": {
+    "topic_pattern": "$devices/+/twin/update",
+    "payload_format": {
+      "state": {
+        "reported": "{ ... device's current state ... }",
+        "desired": "{ ... application's desired state ... }"
+      },
+      "version": "optional version number for optimistic locking"
+    },
+    "responses": {
+      "accepted": "$devices/{clientid}/twin/update/accepted",
+      "rejected": "$devices/{clientid}/twin/update/rejected"
+    }
+  }
+}

@@ -1,0 +1,164 @@
+{
+  "name": "republish_rules",
+  "description": "Topic transformation and message republishing rules",
+  "enabled": true,
+  "rules": [
+    {
+      "name": "route_by_device_type",
+      "description": "Route messages to type-specific topics based on payload",
+      "sql": "SELECT clientid, topic, payload, payload.device_type as device_type, payload.device_id as device_id FROM \"devices/incoming\"",
+      "actions": [
+        {
+          "function": "republish",
+          "args": {
+            "topic": "devices/${device_type}/${device_id}",
+            "qos": 1,
+            "retain": false,
+            "payload": "${payload}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "add_timestamp",
+      "description": "Add server timestamp to messages",
+      "sql": "SELECT clientid, topic, payload FROM \"transform/add-timestamp\"",
+      "actions": [
+        {
+          "function": "republish",
+          "args": {
+            "topic": "transform/with-timestamp",
+            "qos": 1,
+            "retain": false,
+            "payload": "{\"original\": ${payload}, \"server_timestamp\": \"${timestamp}\", \"processed\": true}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "extract_value",
+      "description": "Extract only value field from full payload",
+      "sql": "SELECT payload.value as value, payload.unit as unit FROM \"extract/full-payload\"",
+      "actions": [
+        {
+          "function": "republish",
+          "args": {
+            "topic": "extract/value-only",
+            "qos": 1,
+            "retain": false,
+            "payload": "{\"value\": ${value}, \"unit\": \"${unit}\"}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "upgrade_qos",
+      "description": "Republish with higher QoS for important messages",
+      "sql": "SELECT * FROM \"qos/input\" WHERE payload.important = true",
+      "actions": [
+        {
+          "function": "republish",
+          "args": {
+            "topic": "qos/upgraded",
+            "qos": 2,
+            "retain": false,
+            "payload": "${payload}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fanout_pattern",
+      "description": "Republish to multiple destinations",
+      "sql": "SELECT * FROM \"fanout/source\"",
+      "actions": [
+        {
+          "function": "republish",
+          "args": {
+            "topic": "fanout/dest1",
+            "qos": 1,
+            "payload": "${payload}"
+          }
+        },
+        {
+          "function": "republish",
+          "args": {
+            "topic": "fanout/dest2",
+            "qos": 1,
+            "payload": "${payload}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "aggregate_sources",
+      "description": "Collect messages from multiple sources into one topic",
+      "sql": "SELECT clientid, topic, payload, str_split(topic, '/', 2) as source_id FROM \"source/+/data\"",
+      "actions": [
+        {
+          "function": "republish",
+          "args": {
+            "topic": "aggregated/combined",
+            "qos": 1,
+            "retain": false,
+            "payload": "{\"source\": \"${source_id}\", \"data\": ${payload}, \"collected_at\": \"${timestamp}\"}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "add_retain_flag",
+      "description": "Republish with retain flag for state messages",
+      "sql": "SELECT * FROM \"retain/input\"",
+      "actions": [
+        {
+          "function": "republish",
+          "args": {
+            "topic": "retain/output",
+            "qos": 1,
+            "retain": true,
+            "payload": "${payload}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "normalize_topic",
+      "description": "Normalize legacy topic format to new format",
+      "sql": "SELECT payload, str_replace(topic, 'legacy/', 'v2/') as new_topic FROM \"legacy/#\"",
+      "actions": [
+        {
+          "function": "republish",
+          "args": {
+            "topic": "${new_topic}",
+            "qos": 1,
+            "retain": false,
+            "payload": "${payload}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "enrich_with_metadata",
+      "description": "Add broker metadata to messages",
+      "sql": "SELECT clientid, username, topic, payload, qos, timestamp FROM \"enrich/#\"",
+      "actions": [
+        {
+          "function": "republish",
+          "args": {
+            "topic": "enriched/${topic}",
+            "qos": 1,
+            "payload": "{\"payload\": ${payload}, \"metadata\": {\"clientid\": \"${clientid}\", \"username\": \"${username}\", \"qos\": ${qos}, \"broker_timestamp\": \"${timestamp}\"}}"
+          }
+        }
+      ]
+    }
+  ],
+  "notes": {
+    "topic_templates": "Use ${variable} syntax for dynamic topics",
+    "payload_templates": "JSON templates can reference SQL SELECT fields",
+    "qos_levels": "QoS can be upgraded/downgraded in republish",
+    "retain_flag": "Retain flag can be added/removed in republish",
+    "performance": "Republish is synchronous - consider async for high throughput"
+  }
+}

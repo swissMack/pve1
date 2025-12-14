@@ -1,0 +1,123 @@
+{
+  "name": "webhook_http_bridge",
+  "description": "HTTP webhook bridge configuration for external system integration",
+  "enabled": true,
+  "bridges": [
+    {
+      "name": "external_api_webhook",
+      "type": "http",
+      "description": "Send MQTT messages to external REST API",
+      "connector": {
+        "url": "${WEBHOOK_URL:-http://webhook-server:8080/api/mqtt/events}",
+        "method": "POST",
+        "headers": {
+          "Content-Type": "application/json",
+          "X-MQTT-Topic": "${topic}",
+          "X-MQTT-ClientId": "${clientid}",
+          "X-Source": "emqx-mqtt-broker",
+          "Authorization": "Bearer ${WEBHOOK_TOKEN:-}"
+        },
+        "body": {
+          "topic": "${topic}",
+          "payload": "${payload}",
+          "clientid": "${clientid}",
+          "username": "${username}",
+          "qos": "${qos}",
+          "timestamp": "${timestamp}",
+          "metadata": {
+            "broker": "emqx",
+            "node": "${node}"
+          }
+        },
+        "ssl": {
+          "enable": false,
+          "verify": "verify_none"
+        },
+        "connect_timeout": "5s",
+        "request_timeout": "10s",
+        "pool_size": 8
+      },
+      "retry": {
+        "max_retries": 3,
+        "initial_delay": "1s",
+        "max_delay": "30s",
+        "multiplier": 2
+      },
+      "resource_opts": {
+        "worker_pool_size": 4,
+        "health_check_interval": "30s",
+        "query_mode": "async",
+        "batch_size": 100,
+        "batch_time": "1s"
+      }
+    },
+    {
+      "name": "alert_webhook",
+      "type": "http",
+      "description": "Send alerts to alerting system (PagerDuty, Slack, etc.)",
+      "connector": {
+        "url": "${ALERT_WEBHOOK_URL:-http://webhook-server:8080/api/alerts}",
+        "method": "POST",
+        "headers": {
+          "Content-Type": "application/json",
+          "X-Alert-Source": "mqtt-broker"
+        },
+        "body": {
+          "alert_type": "mqtt_event",
+          "severity": "${payload.severity:-info}",
+          "title": "MQTT Alert: ${topic}",
+          "message": "${payload.message:-}",
+          "device_id": "${payload.device_id:-unknown}",
+          "timestamp": "${timestamp}",
+          "raw_payload": "${payload}"
+        },
+        "connect_timeout": "3s",
+        "request_timeout": "5s"
+      },
+      "retry": {
+        "max_retries": 5,
+        "initial_delay": "500ms",
+        "max_delay": "60s"
+      }
+    }
+  ],
+  "rules": [
+    {
+      "name": "webhook_all_events",
+      "description": "Send all messages from webhook/# topics to external API",
+      "sql": "SELECT * FROM \"webhook/#\" WHERE payload.enabled != false",
+      "actions": [
+        {
+          "function": "http_bridge",
+          "args": {
+            "bridge": "external_api_webhook"
+          }
+        }
+      ]
+    },
+    {
+      "name": "webhook_alerts",
+      "description": "Send alert messages to alerting webhook",
+      "sql": "SELECT * FROM \"alerts/#\" WHERE payload.severity IN ('warning', 'error', 'critical')",
+      "actions": [
+        {
+          "function": "http_bridge",
+          "args": {
+            "bridge": "alert_webhook"
+          }
+        }
+      ]
+    }
+  ],
+  "environment_variables": {
+    "WEBHOOK_URL": "Base URL for the external API webhook",
+    "WEBHOOK_TOKEN": "Bearer token for webhook authentication",
+    "ALERT_WEBHOOK_URL": "URL for the alerting webhook endpoint"
+  },
+  "notes": {
+    "retry_policy": "Exponential backoff with 3 retries (1s, 2s, 4s)",
+    "batching": "Messages are batched for efficiency (100 msgs or 1s)",
+    "async_mode": "Webhook delivery is asynchronous to not block MQTT",
+    "health_check": "Bridge health is checked every 30 seconds"
+  }
+}

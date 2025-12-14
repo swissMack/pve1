@@ -1,0 +1,197 @@
+{
+  "name": "influxdb_telemetry",
+  "description": "Write telemetry data to InfluxDB for time-series analysis",
+  "enabled": true,
+  "bridge": {
+    "name": "influxdb_telemetry_bridge",
+    "type": "influxdb_api_v2",
+    "connector": {
+      "server": "${INFLUXDB_URL:-http://influxdb:8086}",
+      "org": "${INFLUXDB_ORG:-mqtt-org}",
+      "bucket": "${INFLUXDB_TELEMETRY_BUCKET:-telemetry}",
+      "token": "${INFLUXDB_TOKEN:-mqtt-influxdb-token}",
+      "precision": "ms"
+    },
+    "resource_opts": {
+      "worker_pool_size": 4,
+      "health_check_interval": "15s",
+      "query_mode": "async",
+      "batch_size": 100,
+      "batch_time": "1s"
+    }
+  },
+  "rules": [
+    {
+      "name": "sensor_telemetry",
+      "description": "Store sensor readings in InfluxDB",
+      "sql": "SELECT clientid, topic, payload, payload.device_id as device_id, payload.sensor_type as sensor_type, payload.value as value, payload.unit as unit FROM \"telemetry/sensors/#\"",
+      "actions": [
+        {
+          "function": "influxdb_write",
+          "args": {
+            "bridge": "influxdb_telemetry_bridge",
+            "data": {
+              "measurement": "sensor_readings",
+              "tags": {
+                "device_id": "${device_id}",
+                "sensor_type": "${sensor_type}",
+                "unit": "${unit}"
+              },
+              "fields": {
+                "value": "${value}"
+              },
+              "timestamp": "${timestamp}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "temperature_readings",
+      "description": "Store temperature readings with location tags",
+      "sql": "SELECT payload.device_id as device_id, payload.location as location, payload.temperature as temp, payload.humidity as humidity FROM \"telemetry/+/environment\" WHERE payload.temperature IS NOT NULL",
+      "actions": [
+        {
+          "function": "influxdb_write",
+          "args": {
+            "bridge": "influxdb_telemetry_bridge",
+            "data": {
+              "measurement": "environment",
+              "tags": {
+                "device_id": "${device_id}",
+                "location": "${location}"
+              },
+              "fields": {
+                "temperature": "${temp}",
+                "humidity": "${humidity}"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "device_metrics",
+      "description": "Store device operational metrics",
+      "sql": "SELECT clientid as device_id, payload.cpu_usage as cpu, payload.memory_usage as memory, payload.disk_usage as disk, payload.network_rx as net_rx, payload.network_tx as net_tx FROM \"telemetry/+/metrics\"",
+      "actions": [
+        {
+          "function": "influxdb_write",
+          "args": {
+            "bridge": "influxdb_telemetry_bridge",
+            "data": {
+              "measurement": "device_metrics",
+              "tags": {
+                "device_id": "${device_id}"
+              },
+              "fields": {
+                "cpu_usage": "${cpu}",
+                "memory_usage": "${memory}",
+                "disk_usage": "${disk}",
+                "network_rx": "${net_rx}",
+                "network_tx": "${net_tx}"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "energy_readings",
+      "description": "Store energy consumption data",
+      "sql": "SELECT payload.meter_id as meter_id, payload.location as location, payload.power_watts as power, payload.voltage as voltage, payload.current as current, payload.power_factor as pf FROM \"telemetry/energy/#\"",
+      "actions": [
+        {
+          "function": "influxdb_write",
+          "args": {
+            "bridge": "influxdb_telemetry_bridge",
+            "data": {
+              "measurement": "energy",
+              "tags": {
+                "meter_id": "${meter_id}",
+                "location": "${location}"
+              },
+              "fields": {
+                "power_watts": "${power}",
+                "voltage": "${voltage}",
+                "current": "${current}",
+                "power_factor": "${pf}"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "connection_events",
+      "description": "Track connection events for analytics",
+      "sql": "SELECT clientid, username, peername, connected_at FROM \"$events/client_connected\"",
+      "actions": [
+        {
+          "function": "influxdb_write",
+          "args": {
+            "bridge": "influxdb_telemetry_bridge",
+            "data": {
+              "measurement": "connection_events",
+              "tags": {
+                "event_type": "connected",
+                "clientid": "${clientid}",
+                "username": "${username}"
+              },
+              "fields": {
+                "ip_address": "${peername}",
+                "value": 1
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "message_throughput",
+      "description": "Track message throughput by topic",
+      "sql": "SELECT topic, qos, payload_size FROM \"#\" WHERE topic !~ '^\\$'",
+      "actions": [
+        {
+          "function": "influxdb_write",
+          "args": {
+            "bridge": "influxdb_telemetry_bridge",
+            "data": {
+              "measurement": "message_throughput",
+              "tags": {
+                "topic": "${topic}",
+                "qos": "${qos}"
+              },
+              "fields": {
+                "count": 1,
+                "payload_size": "${payload_size}"
+              }
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "dashboards": {
+    "suggested_queries": [
+      {
+        "name": "Average temperature by location",
+        "query": "from(bucket: \"telemetry\") |> range(start: -1h) |> filter(fn: (r) => r._measurement == \"environment\") |> filter(fn: (r) => r._field == \"temperature\") |> aggregateWindow(every: 5m, fn: mean)"
+      },
+      {
+        "name": "Device connection count",
+        "query": "from(bucket: \"telemetry\") |> range(start: -24h) |> filter(fn: (r) => r._measurement == \"connection_events\") |> group(columns: [\"clientid\"]) |> count()"
+      },
+      {
+        "name": "Message rate per topic",
+        "query": "from(bucket: \"telemetry\") |> range(start: -1h) |> filter(fn: (r) => r._measurement == \"message_throughput\") |> aggregateWindow(every: 1m, fn: count)"
+      }
+    ]
+  },
+  "notes": {
+    "batching": "Messages are batched (100 msgs or 1s) for write efficiency",
+    "precision": "Timestamps use millisecond precision",
+    "retention": "telemetry bucket has 24h retention by default",
+    "performance": "Async write mode to not block MQTT message flow"
+  }
+}

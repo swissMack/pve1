@@ -1,0 +1,115 @@
+{
+  "name": "device_status_tracking",
+  "description": "Track device online/offline status and last seen timestamp",
+  "enabled": true,
+  "rules": [
+    {
+      "name": "device_connected",
+      "description": "Track when a device connects",
+      "sql": "SELECT clientid, username, connected_at, peername, protocol FROM \"$events/client_connected\" WHERE clientid =~ /^(sensor|actuator|gateway|camera|device)-/",
+      "actions": [
+        {
+          "function": "republish",
+          "args": {
+            "topic": "$devices/${clientid}/status",
+            "qos": 1,
+            "retain": true,
+            "payload": "{\"status\": \"online\", \"connected_at\": \"${connected_at}\", \"ip_address\": \"${peername}\", \"protocol\": \"${protocol}\"}"
+          }
+        },
+        {
+          "function": "influxdb_write",
+          "args": {
+            "bucket": "device_twins",
+            "measurement": "device_status",
+            "tags": {
+              "device_id": "${clientid}",
+              "event": "connected"
+            },
+            "fields": {
+              "status": "online",
+              "ip_address": "${peername}",
+              "protocol": "${protocol}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "device_disconnected",
+      "description": "Track when a device disconnects",
+      "sql": "SELECT clientid, username, disconnected_at, reason FROM \"$events/client_disconnected\" WHERE clientid =~ /^(sensor|actuator|gateway|camera|device)-/",
+      "actions": [
+        {
+          "function": "republish",
+          "args": {
+            "topic": "$devices/${clientid}/status",
+            "qos": 1,
+            "retain": true,
+            "payload": "{\"status\": \"offline\", \"disconnected_at\": \"${disconnected_at}\", \"reason\": \"${reason}\"}"
+          }
+        },
+        {
+          "function": "influxdb_write",
+          "args": {
+            "bucket": "device_twins",
+            "measurement": "device_status",
+            "tags": {
+              "device_id": "${clientid}",
+              "event": "disconnected"
+            },
+            "fields": {
+              "status": "offline",
+              "reason": "${reason}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "device_last_seen",
+      "description": "Update last_seen on any message from device",
+      "sql": "SELECT clientid, topic, timestamp FROM \"$devices/+/#\" WHERE clientid =~ /^(sensor|actuator|gateway|camera|device)-/",
+      "actions": [
+        {
+          "function": "influxdb_write",
+          "args": {
+            "bucket": "device_twins",
+            "measurement": "device_activity",
+            "tags": {
+              "device_id": "${clientid}"
+            },
+            "fields": {
+              "last_seen": "${timestamp}",
+              "topic": "${topic}"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "event_topics": {
+    "client_connected": "$events/client_connected",
+    "client_disconnected": "$events/client_disconnected",
+    "client_subscribed": "$events/client_subscribed",
+    "client_unsubscribed": "$events/client_unsubscribed",
+    "message_publish": "$events/message_publish"
+  },
+  "status_values": {
+    "online": "Device is currently connected",
+    "offline": "Device has disconnected",
+    "registered": "Device is registered but never connected",
+    "unknown": "Device status cannot be determined"
+  },
+  "notes": {
+    "filter_pattern": "Filters to only track devices with specific ID prefixes",
+    "retained_status": "Status is published as retained for immediate availability on subscribe",
+    "influxdb_storage": "All status changes are stored in InfluxDB for historical tracking",
+    "emqx_events": "Uses EMQX built-in $events topics for connection tracking"
+  },
+  "emqx_configuration": {
+    "enable_sys_topics": true,
+    "sys_topics_interval": "1s",
+    "description": "Ensure EMQX $SYS and $events topics are enabled for status tracking"
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "name": "message-to-influxdb",
+  "description": "Store all MQTT messages to InfluxDB for history and replay",
+  "enabled": true,
+  "sql": "SELECT * FROM \"#\" WHERE topic !~ '^\\$'",
+  "actions": [
+    {
+      "function": "influxdb_write",
+      "args": {
+        "connector": "influxdb-connector",
+        "bucket": "${INFLUXDB_BUCKET:-mqtt_messages_24h}",
+        "measurement": "mqtt_messages",
+        "tags": {
+          "topic": "${topic}",
+          "qos": "${qos}",
+          "client_id": "${clientid}",
+          "username": "${username}"
+        },
+        "fields": {
+          "payload": "${payload}",
+          "retain": "${flags.retain}",
+          "dup": "${flags.dup}"
+        },
+        "timestamp": "${timestamp}"
+      }
+    }
+  ],
+  "notes": [
+    "Excludes system topics ($SYS, $devices, $share)",
+    "Stores to configurable bucket (default: mqtt_messages_24h)",
+    "Tags enable efficient querying by topic, client, QoS",
+    "Timestamp from message publish time"
+  ]
+}

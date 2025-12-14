@@ -1,0 +1,34 @@
+{
+  "name": "device_twin_get",
+  "description": "Handle device twin GET requests - returns current twin state to device",
+  "enabled": true,
+  "sql": "SELECT clientid, topic, payload FROM \"$devices/+/twin/get\" WHERE payload.clientid = clientid OR payload = '{}'",
+  "actions": [
+    {
+      "function": "republish",
+      "args": {
+        "topic": "$devices/${clientid}/twin/get/response",
+        "qos": 1,
+        "retain": false,
+        "payload": "{\"state\": {\"desired\": ${$retained:$devices/${clientid}/twin/desired}, \"reported\": ${$retained:$devices/${clientid}/twin/reported}}, \"metadata\": {\"timestamp\": \"${timestamp}\", \"version\": 1}}"
+      }
+    }
+  ],
+  "notes": {
+    "topic_pattern": "$devices/+/twin/get",
+    "response_topic": "$devices/{clientid}/twin/get/response",
+    "mqtt_version": "Works with MQTT 3.1.1 and 5.0",
+    "implementation_note": "This rule provides basic twin GET functionality. For production, consider using EMQX's built-in data integration with a backend service for proper state management."
+  },
+  "alternative_implementation": {
+    "description": "For production deployments, use HTTP webhook to a backend service",
+    "webhook_config": {
+      "url": "http://backend:8080/api/devices/${clientid}/twin",
+      "method": "GET",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-Device-Id": "${clientid}"
+      }
+    }
+  }
+}

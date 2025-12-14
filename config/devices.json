@@ -1,0 +1,186 @@
+{
+  "description": "Seed device registry data for MQTT test ecosystem",
+  "version": "1.0.0",
+  "devices": [
+    {
+      "device_id": "sensor-001",
+      "type": "temperature_sensor",
+      "name": "Office Temperature Sensor",
+      "location": "building-a/floor-1/office-101",
+      "capabilities": ["temperature", "humidity"],
+      "firmware_version": "2.1.0",
+      "metadata": {
+        "manufacturer": "SensorCorp",
+        "model": "TC-100",
+        "install_date": "2024-01-01"
+      },
+      "twin": {
+        "desired": {
+          "reporting_interval": 60,
+          "temperature_unit": "celsius",
+          "alerts_enabled": true
+        },
+        "reported": {
+          "reporting_interval": 60,
+          "temperature_unit": "celsius",
+          "alerts_enabled": true,
+          "battery_level": 95
+        }
+      },
+      "acl": {
+        "publish": ["telemetry/sensors/${device_id}/#", "$devices/${device_id}/#"],
+        "subscribe": ["commands/${device_id}/#", "$devices/${device_id}/twin/update/delta"]
+      }
+    },
+    {
+      "device_id": "sensor-002",
+      "type": "multi_sensor",
+      "name": "Warehouse Environmental Monitor",
+      "location": "building-b/warehouse",
+      "capabilities": ["temperature", "humidity", "pressure", "light"],
+      "firmware_version": "2.1.0",
+      "metadata": {
+        "manufacturer": "SensorCorp",
+        "model": "MC-200",
+        "install_date": "2024-02-15"
+      },
+      "twin": {
+        "desired": {
+          "reporting_interval": 30,
+          "temperature_unit": "celsius",
+          "alerts_enabled": true,
+          "thresholds": {
+            "temperature_max": 30,
+            "humidity_max": 70
+          }
+        },
+        "reported": {}
+      },
+      "acl": {
+        "publish": ["telemetry/sensors/${device_id}/#", "$devices/${device_id}/#"],
+        "subscribe": ["commands/${device_id}/#", "$devices/${device_id}/twin/update/delta"]
+      }
+    },
+    {
+      "device_id": "actuator-001",
+      "type": "hvac_controller",
+      "name": "HVAC Zone Controller",
+      "location": "building-a/floor-1",
+      "capabilities": ["heating", "cooling", "ventilation"],
+      "firmware_version": "1.5.2",
+      "metadata": {
+        "manufacturer": "ClimateControl Inc",
+        "model": "HV-500",
+        "install_date": "2023-11-01"
+      },
+      "twin": {
+        "desired": {
+          "target_temperature": 22,
+          "mode": "auto",
+          "fan_speed": "medium"
+        },
+        "reported": {
+          "target_temperature": 22,
+          "mode": "cooling",
+          "fan_speed": "medium",
+          "current_temperature": 24.5
+        }
+      },
+      "acl": {
+        "publish": ["telemetry/hvac/${device_id}/#", "$devices/${device_id}/#"],
+        "subscribe": ["commands/${device_id}/#", "$devices/${device_id}/twin/update/delta", "schedules/hvac/#"]
+      }
+    },
+    {
+      "device_id": "gateway-001",
+      "type": "edge_gateway",
+      "name": "Building A Edge Gateway",
+      "location": "building-a/server-room",
+      "capabilities": ["mqtt_bridge", "data_aggregation", "local_processing"],
+      "firmware_version": "3.0.1",
+      "metadata": {
+        "manufacturer": "EdgeTech",
+        "model": "EG-1000",
+        "install_date": "2023-06-01"
+      },
+      "twin": {
+        "desired": {
+          "aggregation_interval": 300,
+          "compression_enabled": true,
+          "local_storage_days": 7
+        },
+        "reported": {
+          "aggregation_interval": 300,
+          "compression_enabled": true,
+          "local_storage_days": 7,
+          "connected_devices": 15,
+          "uptime_hours": 720
+        }
+      },
+      "acl": {
+        "publish": ["telemetry/#", "$devices/#", "gateway/${device_id}/#"],
+        "subscribe": ["commands/#", "$devices/${device_id}/#", "config/gateway/#"]
+      }
+    },
+    {
+      "device_id": "camera-001",
+      "type": "ip_camera",
+      "name": "Entrance Security Camera",
+      "location": "building-a/entrance",
+      "capabilities": ["video_stream", "motion_detection", "night_vision"],
+      "firmware_version": "4.2.0",
+      "metadata": {
+        "manufacturer": "SecureVision",
+        "model": "SV-CAM-HD",
+        "install_date": "2024-01-10"
+      },
+      "twin": {
+        "desired": {
+          "resolution": "1080p",
+          "fps": 30,
+          "motion_sensitivity": "high",
+          "night_vision": "auto"
+        },
+        "reported": {
+          "resolution": "1080p",
+          "fps": 30,
+          "motion_sensitivity": "high",
+          "night_vision": "auto",
+          "storage_used_percent": 45
+        }
+      },
+      "acl": {
+        "publish": ["events/camera/${device_id}/#", "$devices/${device_id}/#"],
+        "subscribe": ["commands/${device_id}/#", "$devices/${device_id}/twin/update/delta"]
+      }
+    }
+  ],
+  "device_groups": [
+    {
+      "group_id": "building-a-sensors",
+      "name": "Building A Sensors",
+      "device_ids": ["sensor-001", "sensor-002"],
+      "common_config": {
+        "reporting_interval": 60,
+        "alerts_enabled": true
+      }
+    },
+    {
+      "group_id": "all-actuators",
+      "name": "All Actuators",
+      "device_ids": ["actuator-001"],
+      "common_config": {
+        "safety_mode": true,
+        "manual_override_allowed": true
+      }
+    }
+  ],
+  "topic_conventions": {
+    "telemetry": "telemetry/{device_type}/{device_id}/{metric}",
+    "commands": "commands/{device_id}/{command}",
+    "events": "events/{device_type}/{device_id}/{event}",
+    "twin_desired": "$devices/{device_id}/twin/desired",
+    "twin_reported": "$devices/{device_id}/twin/reported",
+    "twin_delta": "$devices/{device_id}/twin/update/delta"
+  }
+}

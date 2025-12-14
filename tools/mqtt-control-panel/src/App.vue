@@ -263,6 +263,75 @@ onMounted(() => {
         </section>
 
         <section class="info-section">
+          <h3><i class="pi pi-bolt"></i> Data Generator</h3>
+          <p class="section-intro">Node.js service that simulates 8 IoT devices publishing telemetry data.</p>
+
+          <div class="generator-info">
+            <div class="generator-card">
+              <h4>Connection</h4>
+              <code>mqtt://localhost:1883</code>
+              <span>TCP connection to EMQX</span>
+            </div>
+            <div class="generator-card">
+              <h4>Sensors</h4>
+              <code>Every 10s (configurable)</code>
+              <span>Temp, humidity, light, battery</span>
+            </div>
+            <div class="generator-card">
+              <h4>Location</h4>
+              <code>Every 5s (configurable)</code>
+              <span>GPS for mobile devices only</span>
+            </div>
+          </div>
+
+          <h4 class="subsection-title">Sensor Payload Example</h4>
+          <pre class="payload-example">{
+  "timestamp": "2025-12-14T10:30:00Z",
+  "deviceId": "DEV001",
+  "sensors": {
+    "temperature": 22.5,
+    "humidity": 55.2,
+    "light": 850,
+    "batteryLevel": 85
+  },
+  "metadata": { "signalStrength": 78 }
+}</pre>
+
+          <h4 class="subsection-title">Supported Commands</h4>
+          <div class="commands-grid">
+            <div class="command-item">
+              <code>set_sensor</code>
+              <span>Override sensor values</span>
+            </div>
+            <div class="command-item">
+              <code>set_location</code>
+              <span>Set GPS coordinates</span>
+            </div>
+            <div class="command-item">
+              <code>set_sensor_interval</code>
+              <span>Per-device sampling rate</span>
+            </div>
+            <div class="command-item">
+              <code>pause / resume</code>
+              <span>Stop/start device publishing</span>
+            </div>
+            <div class="command-item">
+              <code>reset</code>
+              <span>Reset to initial values</span>
+            </div>
+            <div class="command-item">
+              <code>set_heading / set_speed</code>
+              <span>Control mobile movement</span>
+            </div>
+          </div>
+
+          <h4 class="subsection-title">Running the Generator</h4>
+          <pre class="code-block">cd /MQTTServer/scripts/simportal-generator
+npm install
+node index.js</pre>
+        </section>
+
+        <section class="info-section">
           <h3><i class="pi pi-check-circle"></i> Testing Guide</h3>
           <ol class="test-steps">
             <li>
@@ -619,6 +688,107 @@ body {
 
 .auto-tag {
   margin-bottom: 0.5rem;
+}
+
+/* Data Generator Section */
+.section-intro {
+  color: #aaa;
+  font-size: 0.85rem;
+  margin: 0 0 1rem 0;
+}
+
+.generator-info {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.generator-card {
+  background: #1a1a2e;
+  border: 1px solid #333;
+  border-radius: 6px;
+  padding: 0.75rem;
+  text-align: center;
+}
+
+.generator-card h4 {
+  margin: 0 0 0.5rem 0;
+  color: #4fc3f7;
+  font-size: 0.8rem;
+}
+
+.generator-card code {
+  display: block;
+  background: rgba(79, 195, 247, 0.1);
+  color: #4fc3f7;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  margin-bottom: 0.35rem;
+}
+
+.generator-card span {
+  color: #888;
+  font-size: 0.7rem;
+}
+
+.subsection-title {
+  color: #888;
+  font-size: 0.8rem;
+  margin: 1rem 0 0.5rem 0;
+  font-weight: 500;
+}
+
+.payload-example {
+  background: #1a1a2e;
+  border: 1px solid #333;
+  border-radius: 6px;
+  padding: 0.75rem;
+  font-size: 0.7rem;
+  color: #10b981;
+  overflow-x: auto;
+  margin: 0;
+}
+
+.commands-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+}
+
+.command-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  background: #1a1a2e;
+  border-radius: 4px;
+}
+
+.command-item code {
+  background: rgba(168, 85, 247, 0.15);
+  color: #a855f7;
+  padding: 0.15rem 0.4rem;
+  border-radius: 3px;
+  font-size: 0.7rem;
+  white-space: nowrap;
+}
+
+.command-item span {
+  color: #888;
+  font-size: 0.7rem;
+}
+
+.code-block {
+  background: #1a1a2e;
+  border: 1px solid #333;
+  border-radius: 6px;
+  padding: 0.75rem;
+  font-size: 0.75rem;
+  color: #f59e0b;
+  margin: 0;
+  overflow-x: auto;
 }
 
 .service-tab.auto-login {

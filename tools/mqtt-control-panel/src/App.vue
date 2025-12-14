@@ -95,7 +95,7 @@ onMounted(() => {
             <i class="pi pi-info-circle"></i>
             <span>Info</span>
           </button>
-          <a href="http://192.168.1.199:3000/dashboards" target="_blank" class="service-tab auto-login" title="Grafana Dashboards (no login required)">
+          <a href="http://192.168.1.199:3000/d/b730b349-e24f-4a53-a7c3-19012b906123/sim-portal-sensors?orgId=1" target="_blank" class="service-tab auto-login" title="SIM Portal Sensors Dashboard (no login required)">
             <i class="pi pi-chart-line"></i>
             <span>Grafana</span>
           </a>
@@ -369,8 +369,8 @@ node index.js</pre>
               <Tag value="No Login Required" severity="success" class="auto-tag" />
               <p>Visualization and alerting platform</p>
               <code>http://192.168.1.199:3000</code>
-              <a href="http://192.168.1.199:3000/dashboards" target="_blank" class="service-link auto">
-                <i class="pi pi-external-link"></i> Open Dashboards
+              <a href="http://192.168.1.199:3000/d/b730b349-e24f-4a53-a7c3-19012b906123/sim-portal-sensors?orgId=1" target="_blank" class="service-link auto">
+                <i class="pi pi-external-link"></i> Open Sensors Dashboard
               </a>
             </div>
             <div class="service-card">

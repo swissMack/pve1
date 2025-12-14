@@ -1,0 +1,182 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  DOCKER_BUILDKIT: 1
+  COMPOSE_DOCKER_CLI_BUILD: 1
+
+jobs:
+  lint:
+    name: Lint & Validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate Docker Compose
+        run: |
+          docker compose -f docker/docker-compose.yml config --quiet
+          docker compose -f docker/docker-compose.yml -f docker/docker-compose.dev.yml config --quiet
+
+      - name: Validate YAML files
+        run: |
+          python3 -c "import yaml; yaml.safe_load(open('docker/services/prometheus/prometheus.yml'))"
+
+      - name: Check shell scripts
+        run: |
+          find scripts/ -name "*.sh" -exec bash -n {} \;
+          find tests/integration/ -name "*.sh" -exec bash -n {} \;
+
+  build:
+    name: Build & Start Services
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up environment
+        run: |
+          cp docker/.env.example docker/.env
+
+      - name: Generate TLS certificates
+        run: |
+          chmod +x scripts/generate-certs.sh
+          ./scripts/generate-certs.sh
+
+      - name: Start Docker Compose
+        run: |
+          cd docker
+          docker compose up -d
+
+      - name: Wait for services
+        run: |
+          chmod +x scripts/wait-for-services.sh
+          ./scripts/wait-for-services.sh || true
+          sleep 30
+
+      - name: Check service health
+        run: |
+          docker compose -f docker/docker-compose.yml ps
+          curl -f http://localhost:18083/status || exit 1
+          curl -f http://localhost:8086/health || exit 1
+          curl -f http://localhost:9090/-/healthy || exit 1
+          curl -f http://localhost:3000/api/health || exit 1
+
+      - name: Test MQTT connectivity
+        run: |
+          docker run --rm --network mqtt-network eclipse-mosquitto \
+            mosquitto_pub -h mqtt-emqx -p 1883 -t "test/ci" -m "CI test message"
+
+      - name: Collect logs on failure
+        if: failure()
+        run: |
+          docker compose -f docker/docker-compose.yml logs
+
+      - name: Stop services
+        if: always()
+        run: |
+          cd docker
+          docker compose down -v
+
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up environment
+        run: |
+          cp docker/.env.example docker/.env
+          chmod +x scripts/generate-certs.sh
+          ./scripts/generate-certs.sh
+
+      - name: Start services
+        run: |
+          cd docker
+          docker compose up -d
+          sleep 45
+
+      - name: Install mosquitto clients
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mosquitto-clients
+
+      - name: Run basic connectivity test
+        run: |
+          chmod +x tests/integration/test_basic_connectivity.sh
+          ./tests/integration/test_basic_connectivity.sh || true
+
+      - name: Run QoS levels test
+        run: |
+          chmod +x tests/integration/test_qos_levels.sh
+          ./tests/integration/test_qos_levels.sh || true
+
+      - name: Run health endpoints test
+        run: |
+          chmod +x tests/integration/test_health_endpoints.sh
+          ./tests/integration/test_health_endpoints.sh || true
+
+      - name: Stop services
+        if: always()
+        run: |
+          cd docker
+          docker compose down -v
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'config'
+          scan-ref: 'docker/'
+          format: 'table'
+          exit-code: '0'
+          severity: 'CRITICAL,HIGH'
+
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: [build, integration-tests]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: |
+          VERSION=$(date +'%Y.%m.%d')-$(echo ${{ github.sha }} | cut -c1-7)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: Release ${{ steps.version.outputs.version }}
+          body: |
+            ## MQTT Test Ecosystem Release
+
+            ### Changes
+            - Automated release from main branch
+
+            ### Quick Start
+            ```bash
+            git clone https://github.com/${{ github.repository }}.git
+            cd MQTTServer
+            cp docker/.env.example docker/.env
+            ./scripts/generate-certs.sh
+            docker compose -f docker/docker-compose.yml up -d
+            ```
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,169 @@
+groups:
+  - name: mqtt_broker_alerts
+    interval: 30s
+    rules:
+      # EMQX Broker Health
+      - alert: EMQXDown
+        expr: up{job="emqx"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "EMQX broker is down"
+          description: "EMQX broker has been unreachable for more than 1 minute."
+
+      - alert: EMQXHighConnectionCount
+        expr: emqx_connections_count > 9000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High connection count on EMQX"
+          description: "EMQX has {{ $value }} connections, approaching 10K limit."
+
+      - alert: EMQXConnectionsFull
+        expr: emqx_connections_count > 9500
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "EMQX connections near capacity"
+          description: "EMQX has {{ $value }} connections, nearly at capacity."
+
+      # Message Rate Alerts
+      - alert: HighMessageRate
+        expr: rate(emqx_messages_received_total[5m]) > 10000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High message rate detected"
+          description: "Message rate is {{ $value | printf \"%.2f\" }} msg/s."
+
+      - alert: MessageQueueBacklog
+        expr: emqx_queued_messages > 10000
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Message queue backlog detected"
+          description: "{{ $value }} messages are queued."
+
+      - alert: DroppedMessages
+        expr: rate(emqx_messages_dropped_total[5m]) > 10
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Messages being dropped"
+          description: "{{ $value | printf \"%.2f\" }} messages/s are being dropped."
+
+      # Session Alerts
+      - alert: HighSessionCount
+        expr: emqx_sessions_count > 8000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High session count"
+          description: "{{ $value }} active sessions on EMQX."
+
+      - alert: SessionCreationRate
+        expr: rate(emqx_sessions_created_total[5m]) > 500
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High session creation rate"
+          description: "{{ $value | printf \"%.2f\" }} sessions/s being created."
+
+      # Resource Alerts
+      - alert: EMQXHighMemory
+        expr: emqx_vm_used_memory_bytes / emqx_vm_total_memory_bytes > 0.85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "EMQX high memory usage"
+          description: "EMQX memory usage is at {{ $value | printf \"%.1f\" }}%."
+
+      - alert: EMQXHighCPU
+        expr: rate(emqx_vm_cpu_use_total[5m]) > 0.80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "EMQX high CPU usage"
+          description: "EMQX CPU usage is at {{ $value | printf \"%.1f\" }}%."
+
+  - name: infrastructure_alerts
+    interval: 30s
+    rules:
+      # InfluxDB Alerts
+      - alert: InfluxDBDown
+        expr: up{job="influxdb"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "InfluxDB is down"
+          description: "InfluxDB has been unreachable for more than 1 minute."
+
+      - alert: InfluxDBHighWriteLatency
+        expr: influxdb_write_latency_seconds > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "InfluxDB high write latency"
+          description: "InfluxDB write latency is {{ $value | printf \"%.2f\" }}s."
+
+      # Grafana Alerts
+      - alert: GrafanaDown
+        expr: up{job="grafana"} == 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Grafana is down"
+          description: "Grafana dashboard has been unreachable for more than 1 minute."
+
+      # Container Alerts
+      - alert: ContainerHighMemory
+        expr: container_memory_usage_bytes / container_spec_memory_limit_bytes > 0.90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container high memory usage"
+          description: "Container {{ $labels.name }} memory is at {{ $value | printf \"%.1f\" }}%."
+
+      - alert: ContainerRestarting
+        expr: increase(container_restart_count[1h]) > 3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container restarting frequently"
+          description: "Container {{ $labels.name }} has restarted {{ $value }} times in the last hour."
+
+  - name: tls_alerts
+    interval: 1h
+    rules:
+      - alert: TLSCertificateExpiringSoon
+        expr: (probe_ssl_earliest_cert_expiry - time()) / 86400 < 30
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "TLS certificate expiring soon"
+          description: "TLS certificate expires in {{ $value | printf \"%.0f\" }} days."
+
+      - alert: TLSCertificateExpired
+        expr: (probe_ssl_earliest_cert_expiry - time()) < 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "TLS certificate has expired"
+          description: "TLS certificate has expired!"

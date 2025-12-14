@@ -95,15 +95,15 @@ onMounted(() => {
             <i class="pi pi-info-circle"></i>
             <span>Info</span>
           </button>
-          <a href="http://192.168.1.199:3000" target="_blank" class="service-tab" title="Grafana Dashboard">
+          <a href="http://192.168.1.199:3000/dashboards" target="_blank" class="service-tab" title="Grafana Dashboards (admin/admin)">
             <i class="pi pi-chart-line"></i>
             <span>Grafana</span>
           </a>
-          <a href="http://192.168.1.199:8086" target="_blank" class="service-tab" title="InfluxDB">
+          <a href="http://192.168.1.199:8086" target="_blank" class="service-tab" title="InfluxDB Data Explorer (admin/adminpassword)">
             <i class="pi pi-database"></i>
             <span>InfluxDB</span>
           </a>
-          <a href="http://192.168.1.199:18083" target="_blank" class="service-tab" title="EMQX Dashboard">
+          <a href="http://192.168.1.199:18083/#/clients" target="_blank" class="service-tab" title="EMQX Connected Clients (admin/public)">
             <i class="pi pi-sitemap"></i>
             <span>EMQX</span>
           </a>
@@ -293,23 +293,52 @@ onMounted(() => {
         </section>
 
         <section class="info-section">
-          <h3><i class="pi pi-cog"></i> Services</h3>
+          <h3><i class="pi pi-cog"></i> Services & Credentials</h3>
           <div class="services-grid">
             <div class="service-card">
-              <h4>EMQX Broker</h4>
+              <h4><i class="pi pi-sitemap"></i> EMQX Broker</h4>
               <p>MQTT 5.0 broker handling all pub/sub messaging</p>
+              <div class="credentials">
+                <span class="cred-label">Login:</span>
+                <span class="cred-value">admin / public</span>
+              </div>
               <code>mqtt://192.168.1.199:1883</code>
               <code>ws://192.168.1.199:8083/mqtt</code>
+              <a href="http://192.168.1.199:18083/#/clients" target="_blank" class="service-link">
+                <i class="pi pi-external-link"></i> Open Dashboard
+              </a>
             </div>
             <div class="service-card">
-              <h4>InfluxDB</h4>
+              <h4><i class="pi pi-database"></i> InfluxDB</h4>
               <p>Time-series database storing all telemetry</p>
+              <div class="credentials">
+                <span class="cred-label">Login:</span>
+                <span class="cred-value">admin / adminpassword</span>
+              </div>
+              <div class="credentials">
+                <span class="cred-label">Org:</span>
+                <span class="cred-value">mqtt-org</span>
+              </div>
+              <div class="credentials">
+                <span class="cred-label">Bucket:</span>
+                <span class="cred-value">mqtt_messages</span>
+              </div>
               <code>http://192.168.1.199:8086</code>
+              <a href="http://192.168.1.199:8086/orgs/mqtt-org/data-explorer" target="_blank" class="service-link">
+                <i class="pi pi-external-link"></i> Open Data Explorer
+              </a>
             </div>
             <div class="service-card">
-              <h4>Grafana</h4>
+              <h4><i class="pi pi-chart-line"></i> Grafana</h4>
               <p>Visualization and alerting platform</p>
+              <div class="credentials">
+                <span class="cred-label">Login:</span>
+                <span class="cred-value">admin / admin</span>
+              </div>
               <code>http://192.168.1.199:3000</code>
+              <a href="http://192.168.1.199:3000/dashboards" target="_blank" class="service-link">
+                <i class="pi pi-external-link"></i> Open Dashboards
+              </a>
             </div>
           </div>
         </section>
@@ -510,13 +539,20 @@ body {
 }
 
 .service-card h4 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   margin: 0 0 0.5rem 0;
   color: #4fc3f7;
   font-size: 0.9rem;
 }
 
+.service-card h4 i {
+  font-size: 1rem;
+}
+
 .service-card p {
-  margin: 0 0 0.75rem 0;
+  margin: 0 0 0.5rem 0;
   color: #aaa;
   font-size: 0.8rem;
 }
@@ -529,6 +565,48 @@ body {
   border-radius: 4px;
   font-size: 0.7rem;
   margin-top: 0.25rem;
+}
+
+.credentials {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.35rem 0;
+  font-size: 0.8rem;
+}
+
+.cred-label {
+  color: #888;
+}
+
+.cred-value {
+  color: #10b981;
+  font-family: monospace;
+  background: rgba(16, 185, 129, 0.1);
+  padding: 0.15rem 0.4rem;
+  border-radius: 3px;
+}
+
+.service-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.75rem;
+  padding: 0.4rem 0.75rem;
+  background: rgba(79, 195, 247, 0.15);
+  border: 1px solid rgba(79, 195, 247, 0.4);
+  border-radius: 6px;
+  color: #4fc3f7;
+  text-decoration: none;
+  font-size: 0.75rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.service-link:hover {
+  background: rgba(79, 195, 247, 0.25);
+  border-color: #4fc3f7;
+  transform: translateY(-1px);
 }
 
 .header-right {

@@ -1,11 +1,14 @@
 <script setup>
-import { onMounted, computed } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import Button from 'primevue/button'
 import Tag from 'primevue/tag'
 import InputText from 'primevue/inputtext'
+import Dialog from 'primevue/dialog'
 import GlobalSettings from './components/GlobalSettings.vue'
 import DeviceCard from './components/DeviceCard.vue'
 import { useMqtt } from './composables/useMqtt'
+
+const showInfoDialog = ref(false)
 
 const {
   connected,
@@ -88,6 +91,10 @@ onMounted(() => {
           MQTT Control Panel
         </h1>
         <nav class="service-tabs">
+          <button class="service-tab info-tab" @click="showInfoDialog = true" title="Architecture & Testing Info">
+            <i class="pi pi-info-circle"></i>
+            <span>Info</span>
+          </button>
           <a href="http://192.168.1.199:3000" target="_blank" class="service-tab" title="Grafana Dashboard">
             <i class="pi pi-chart-line"></i>
             <span>Grafana</span>
@@ -175,6 +182,139 @@ onMounted(() => {
       <span>MQTT Control Panel v1.0</span>
       <span>Connected to: ws://192.168.1.199:8083/mqtt</span>
     </footer>
+
+    <!-- Info Dialog -->
+    <Dialog
+      v-model:visible="showInfoDialog"
+      header="MQTT Ecosystem Architecture"
+      :modal="true"
+      :style="{ width: '800px', maxWidth: '95vw' }"
+      :draggable="false"
+    >
+      <div class="info-content">
+        <section class="info-section">
+          <h3><i class="pi pi-sitemap"></i> Architecture Overview</h3>
+          <pre class="architecture-diagram">
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           MQTT IoT Ecosystem                                │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────┐         ┌──────────────────┐         ┌──────────────────┐
+│   SIM Portal     │         │   MQTT Control   │         │  Data Generator  │
+│   (Vue App)      │         │     Panel        │         │   (Node.js)      │
+│   Port 5173      │         │   Port 5174      │         │                  │
+└────────┬─────────┘         └────────┬─────────┘         └────────┬─────────┘
+         │                            │                            │
+         │ WebSocket                  │ WebSocket                  │ TCP
+         │ (8083)                     │ (8083)                     │ (1883)
+         │                            │                            │
+         └────────────────────────────┼────────────────────────────┘
+                                      │
+                          ┌───────────▼───────────┐
+                          │      EMQX Broker      │
+                          │    (MQTT + WebSocket) │
+                          │      Port 18083       │
+                          │    (Dashboard UI)     │
+                          └───────────┬───────────┘
+                                      │
+                          ┌───────────▼───────────┐
+                          │   Telegraf Agent      │
+                          │  (MQTT → InfluxDB)    │
+                          └───────────┬───────────┘
+                                      │
+                          ┌───────────▼───────────┐
+                          │      InfluxDB         │
+                          │  (Time Series DB)     │
+                          │      Port 8086        │
+                          └───────────┬───────────┘
+                                      │
+                          ┌───────────▼───────────┐
+                          │       Grafana         │
+                          │   (Visualization)     │
+                          │      Port 3000        │
+                          └───────────────────────┘
+          </pre>
+        </section>
+
+        <section class="info-section">
+          <h3><i class="pi pi-list"></i> MQTT Topics</h3>
+          <div class="topic-list">
+            <div class="topic-item">
+              <code>simportal/devices/{id}/sensors</code>
+              <span>Sensor data (temperature, humidity, light, battery)</span>
+            </div>
+            <div class="topic-item">
+              <code>simportal/devices/{id}/location</code>
+              <span>GPS location data (lat, lon, speed, heading)</span>
+            </div>
+            <div class="topic-item">
+              <code>simportal/devices/{id}/commands</code>
+              <span>Control commands (set values, pause, resume)</span>
+            </div>
+            <div class="topic-item">
+              <code>simportal/devices/{id}/status</code>
+              <span>Device status updates (paused, interval)</span>
+            </div>
+            <div class="topic-item">
+              <code>simportal/config/interval</code>
+              <span>Global configuration (location interval)</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="info-section">
+          <h3><i class="pi pi-check-circle"></i> Testing Guide</h3>
+          <ol class="test-steps">
+            <li>
+              <strong>Verify Data Flow</strong>
+              <p>Watch the device cards update with live sensor data from the Data Generator</p>
+            </li>
+            <li>
+              <strong>Test Bidirectional Control</strong>
+              <p>Change sensor interval in SIM Portal → See it update here in Control Panel</p>
+            </li>
+            <li>
+              <strong>Test Local Control</strong>
+              <p>Adjust sliders and click send buttons to push values to the Data Generator</p>
+            </li>
+            <li>
+              <strong>Check Grafana</strong>
+              <p>Open Grafana to see historical data visualization and dashboards</p>
+            </li>
+            <li>
+              <strong>Verify InfluxDB</strong>
+              <p>Open InfluxDB to query raw time-series data and verify storage</p>
+            </li>
+            <li>
+              <strong>Monitor EMQX</strong>
+              <p>Open EMQX Dashboard to see connected clients, topics, and message rates</p>
+            </li>
+          </ol>
+        </section>
+
+        <section class="info-section">
+          <h3><i class="pi pi-cog"></i> Services</h3>
+          <div class="services-grid">
+            <div class="service-card">
+              <h4>EMQX Broker</h4>
+              <p>MQTT 5.0 broker handling all pub/sub messaging</p>
+              <code>mqtt://192.168.1.199:1883</code>
+              <code>ws://192.168.1.199:8083/mqtt</code>
+            </div>
+            <div class="service-card">
+              <h4>InfluxDB</h4>
+              <p>Time-series database storing all telemetry</p>
+              <code>http://192.168.1.199:8086</code>
+            </div>
+            <div class="service-card">
+              <h4>Grafana</h4>
+              <p>Visualization and alerting platform</p>
+              <code>http://192.168.1.199:3000</code>
+            </div>
+          </div>
+        </section>
+      </div>
+    </Dialog>
   </div>
 </template>
 
@@ -263,6 +403,132 @@ body {
 
 .service-tab i {
   font-size: 0.9rem;
+}
+
+.info-tab {
+  background: rgba(168, 85, 247, 0.1);
+  border-color: rgba(168, 85, 247, 0.3);
+  color: #a855f7;
+  cursor: pointer;
+}
+
+.info-tab:hover {
+  background: rgba(168, 85, 247, 0.2);
+  border-color: #a855f7;
+}
+
+/* Info Dialog Styles */
+.info-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.info-section h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.75rem 0;
+  font-size: 1rem;
+  color: #4fc3f7;
+}
+
+.architecture-diagram {
+  background: #1a1a2e;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 1rem;
+  overflow-x: auto;
+  font-size: 0.7rem;
+  line-height: 1.3;
+  color: #4fc3f7;
+  margin: 0;
+}
+
+.topic-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.topic-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.5rem 0.75rem;
+  background: #1a1a2e;
+  border-radius: 6px;
+}
+
+.topic-item code {
+  background: rgba(79, 195, 247, 0.1);
+  color: #4fc3f7;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.topic-item span {
+  color: #aaa;
+  font-size: 0.8rem;
+}
+
+.test-steps {
+  margin: 0;
+  padding-left: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.test-steps li {
+  color: #eee;
+}
+
+.test-steps strong {
+  color: #4fc3f7;
+}
+
+.test-steps p {
+  margin: 0.25rem 0 0 0;
+  color: #aaa;
+  font-size: 0.85rem;
+}
+
+.services-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.service-card {
+  background: #1a1a2e;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.service-card h4 {
+  margin: 0 0 0.5rem 0;
+  color: #4fc3f7;
+  font-size: 0.9rem;
+}
+
+.service-card p {
+  margin: 0 0 0.75rem 0;
+  color: #aaa;
+  font-size: 0.8rem;
+}
+
+.service-card code {
+  display: block;
+  background: rgba(79, 195, 247, 0.1);
+  color: #4fc3f7;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  margin-top: 0.25rem;
 }
 
 .header-right {

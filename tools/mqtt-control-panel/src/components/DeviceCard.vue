@@ -35,9 +35,38 @@ const longitude = ref(props.device?.location?.longitude || 8.54)
 const speed = ref(props.device?.location?.speed || 0)
 const heading = ref(props.device?.location?.heading || 0)
 const sensorIntervalSeconds = ref(props.device?.sensorInterval || 10)
-const sensorIntervalMinutes = computed({
-  get: () => Math.round(sensorIntervalSeconds.value / 60) || 1,
-  set: (val) => { sensorIntervalSeconds.value = val * 60 }
+
+// Logarithmic scale for interval slider (10 seconds to 7 days)
+const INTERVAL_MIN = 10        // 10 seconds
+const INTERVAL_MAX = 604800    // 7 days in seconds
+const SLIDER_MAX = 100         // Slider range 0-100
+
+// Convert seconds to logarithmic slider position (0-100)
+function secondsToSlider(seconds) {
+  const clamped = Math.max(INTERVAL_MIN, Math.min(INTERVAL_MAX, seconds))
+  return SLIDER_MAX * Math.log(clamped / INTERVAL_MIN) / Math.log(INTERVAL_MAX / INTERVAL_MIN)
+}
+
+// Convert logarithmic slider position to seconds
+// Rounds to nearest whole hour when >= 1 hour, whole day when >= 1 day
+function sliderToSeconds(position) {
+  const seconds = INTERVAL_MIN * Math.pow(INTERVAL_MAX / INTERVAL_MIN, position / SLIDER_MAX)
+  if (seconds >= 86400) {
+    // Round to nearest whole day
+    const days = Math.round(seconds / 86400)
+    return days * 86400
+  } else if (seconds >= 3600) {
+    // Round to nearest whole hour
+    const hours = Math.round(seconds / 3600)
+    return hours * 3600
+  }
+  return Math.round(seconds)
+}
+
+// Computed for logarithmic slider binding
+const intervalSliderValue = computed({
+  get: () => secondsToSlider(sensorIntervalSeconds.value),
+  set: (val) => { sensorIntervalSeconds.value = sliderToSeconds(val) }
 })
 
 // Device type labels
@@ -134,16 +163,20 @@ function formatTime(timestamp) {
 }
 
 // Format interval in human-readable form
+// - Seconds up to 1 hour
+// - Whole hours from 1 hour to 24 hours
+// - Whole days after 24 hours
 function formatInterval(seconds) {
-  if (seconds >= 3600) {
-    const hours = Math.floor(seconds / 3600)
-    const mins = Math.floor((seconds % 3600) / 60)
-    return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`
-  } else if (seconds >= 60) {
-    const mins = Math.floor(seconds / 60)
-    const secs = seconds % 60
-    return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`
+  if (seconds >= 86400) {
+    // 24+ hours: show in days
+    const days = Math.round(seconds / 86400)
+    return `${days}d`
+  } else if (seconds >= 3600) {
+    // 1 hour to 24 hours: show in whole hours
+    const hours = Math.round(seconds / 3600)
+    return `${hours}h`
   }
+  // Under 1 hour: show in seconds
   return `${seconds}s`
 }
 </script>
@@ -228,11 +261,11 @@ function formatInterval(seconds) {
           <div class="control-label">
             <i class="pi pi-clock"></i>
             <span>Sensor Interval</span>
-            <span class="current-value interval-value">{{ formatInterval(device.sensorInterval || 10) }}</span>
+            <span class="current-value interval-value">{{ formatInterval(sensorIntervalSeconds) }}</span>
           </div>
           <div class="control-input">
-            <Slider v-model="sensorIntervalMinutes" :min="1" :max="60" :step="1" class="flex-grow" />
-            <InputNumber v-model="sensorIntervalMinutes" :min="1" :max="1440" suffix=" min" class="value-input" />
+            <Slider v-model="intervalSliderValue" :min="0" :max="100" :step="0.5" class="flex-grow" />
+            <InputNumber v-model="sensorIntervalSeconds" :min="10" :max="604800" class="value-input" />
             <Button icon="pi pi-send" size="small" @click="sendSensorInterval" :disabled="!connected" text />
           </div>
         </div>

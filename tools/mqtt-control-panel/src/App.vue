@@ -6,9 +6,12 @@ import InputText from 'primevue/inputtext'
 import Dialog from 'primevue/dialog'
 import GlobalSettings from './components/GlobalSettings.vue'
 import DeviceCard from './components/DeviceCard.vue'
+import InfluxDashboard from './components/InfluxDashboard.vue'
+import SystemStatus from './components/SystemStatus.vue'
 import { useMqtt } from './composables/useMqtt'
 
 const showInfoDialog = ref(false)
+const activeView = ref('devices') // 'devices' or 'dashboard'
 
 const {
   connected,
@@ -90,6 +93,32 @@ onMounted(() => {
           <i class="pi pi-server"></i>
           MQTT Control Panel
         </h1>
+        <nav class="view-tabs">
+          <button
+            class="view-tab"
+            :class="{ active: activeView === 'devices' }"
+            @click="activeView = 'devices'"
+          >
+            <i class="pi pi-th-large"></i>
+            <span>Devices</span>
+          </button>
+          <button
+            class="view-tab"
+            :class="{ active: activeView === 'dashboard' }"
+            @click="activeView = 'dashboard'"
+          >
+            <i class="pi pi-chart-bar"></i>
+            <span>Dashboard</span>
+          </button>
+          <button
+            class="view-tab"
+            :class="{ active: activeView === 'system' }"
+            @click="activeView = 'system'"
+          >
+            <i class="pi pi-cog"></i>
+            <span>System</span>
+          </button>
+        </nav>
         <nav class="service-tabs">
           <button class="service-tab info-tab" @click="showInfoDialog = true" title="Architecture & Testing Info">
             <i class="pi pi-info-circle"></i>
@@ -151,30 +180,43 @@ onMounted(() => {
 
     <!-- Main Content -->
     <main class="app-main">
-      <!-- Global Settings -->
-      <GlobalSettings
-        :connected="connected"
-        @update-location-interval="handleUpdateLocationInterval"
-      />
-
-      <!-- Device Grid -->
-      <div class="device-grid">
-        <DeviceCard
-          v-for="device in deviceList"
-          :key="device.id"
-          :device="device"
+      <!-- Device Control View -->
+      <template v-if="activeView === 'devices'">
+        <!-- Global Settings -->
+        <GlobalSettings
           :connected="connected"
-          :isMobile="isMobileDevice(device.id)"
-          @set-sensor="handleSetSensor"
-          @set-location="handleSetLocation"
-          @set-heading="handleSetHeading"
-          @set-speed="handleSetSpeed"
-          @set-sensor-interval="handleSetSensorInterval"
-          @pause="handlePause"
-          @resume="handleResume"
-          @reset="handleReset"
+          @update-location-interval="handleUpdateLocationInterval"
         />
-      </div>
+
+        <!-- Device Grid -->
+        <div class="device-grid">
+          <DeviceCard
+            v-for="device in deviceList"
+            :key="device.id"
+            :device="device"
+            :connected="connected"
+            :isMobile="isMobileDevice(device.id)"
+            @set-sensor="handleSetSensor"
+            @set-location="handleSetLocation"
+            @set-heading="handleSetHeading"
+            @set-speed="handleSetSpeed"
+            @set-sensor-interval="handleSetSensorInterval"
+            @pause="handlePause"
+            @resume="handleResume"
+            @reset="handleReset"
+          />
+        </div>
+      </template>
+
+      <!-- InfluxDB Dashboard View -->
+      <template v-else-if="activeView === 'dashboard'">
+        <InfluxDashboard :devices="devices" />
+      </template>
+
+      <!-- System Status View -->
+      <template v-else-if="activeView === 'system'">
+        <SystemStatus />
+      </template>
     </main>
 
     <!-- Footer -->
@@ -468,6 +510,44 @@ body {
 
 .header-left h1 i {
   color: #4fc3f7;
+}
+
+.view-tabs {
+  display: flex;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.view-tab {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 1rem;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: #888;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.view-tab:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.view-tab.active {
+  background: linear-gradient(135deg, #4fc3f7 0%, #29b6f6 100%);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(79, 195, 247, 0.3);
+}
+
+.view-tab i {
+  font-size: 0.9rem;
 }
 
 .service-tabs {

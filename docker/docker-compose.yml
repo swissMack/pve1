@@ -35,6 +35,27 @@ services:
       - mqtt-network
     restart: unless-stopped
 
+  # Data Generator - Simulates IoT devices publishing to MQTT
+  data-generator:
+    build:
+      context: ../scripts/simportal-generator
+      dockerfile: Dockerfile
+    container_name: mqtt-data-generator
+    hostname: data-generator
+    environment:
+      - MQTT_BROKER_URL=mqtt://emqx:1883
+      - SENSOR_INTERVAL=${DATA_GEN_SENSOR_INTERVAL:-10}
+      - LOCATION_INTERVAL=${DATA_GEN_LOCATION_INTERVAL:-5}
+      - MQTT_TOPIC_PREFIX=${DATA_GEN_TOPIC_PREFIX:-simportal/devices}
+    volumes:
+      - ../config:/app/config:ro
+    networks:
+      - mqtt-network
+    restart: unless-stopped
+    depends_on:
+      emqx:
+        condition: service_healthy
+
   # InfluxDB - Time-series storage for message history
   influxdb:
     image: influxdb:2.7

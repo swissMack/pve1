@@ -45,6 +45,7 @@ export function useMqtt(brokerUrl = 'ws://192.168.1.199:8083/mqtt') {
       client.value.subscribe('simportal/devices/+/sensors', { qos: 1 })
       client.value.subscribe('simportal/devices/+/location', { qos: 1 })
       client.value.subscribe('simportal/devices/+/status', { qos: 1 })
+      client.value.subscribe('simportal/devices/+/commands', { qos: 1 }) // Also listen for commands from other sources
     })
 
     client.value.on('message', (topic, payload) => {
@@ -69,6 +70,17 @@ export function useMqtt(brokerUrl = 'ws://192.168.1.199:8083/mqtt') {
             if (data.sensorInterval !== undefined) {
               devices[deviceId].sensorInterval = data.sensorInterval
               console.log(`[MQTT] ✅ ${deviceId} sensor interval updated to ${data.sensorInterval}s`)
+            }
+          } else if (type === 'commands') {
+            // Handle commands from other sources (e.g., SIM Portal)
+            console.log(`[MQTT] Received command for ${deviceId}:`, data)
+            if (data.type === 'set_sensor_interval' && data.value !== undefined) {
+              devices[deviceId].sensorInterval = data.value
+              console.log(`[MQTT] ✅ ${deviceId} sensor interval set to ${data.value}s (from external command)`)
+            } else if (data.type === 'pause') {
+              devices[deviceId].paused = true
+            } else if (data.type === 'resume') {
+              devices[deviceId].paused = false
             }
           }
         } else {

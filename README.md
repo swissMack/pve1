@@ -79,6 +79,37 @@ For detailed setup instructions, see [quickstart.md](specs/001-mqtt-test-ecosyst
 | Prometheus | 9090 | Metrics API |
 | Grafana | 3000 | Dashboards (admin/admin) |
 
+## Connecting with MQTT Explorer
+
+[MQTT Explorer](https://mqtt-explorer.com/) is a graphical MQTT client for visualizing topics and messages.
+
+### Connection Settings
+
+| Setting | Value |
+|---------|-------|
+| Protocol | mqtt:// |
+| Host | localhost (or your machine IP) |
+| Port | 1883 |
+| Username | (leave empty) |
+| Password | (leave empty) |
+
+### Useful Topics to Subscribe
+
+| Topic Pattern | Description |
+|---------------|-------------|
+| `simportal/#` | All SIM Portal device messages |
+| `simportal/devices/+/sensors` | Sensor data from all devices |
+| `simportal/devices/+/location` | GPS location from all devices |
+| `simportal/devices/+/status` | Device status updates |
+| `simportal/devices/+/commands` | Commands sent to devices |
+| `simportal/devices/+/config` | Device configuration |
+
+### Alternative Connection Options
+
+- **WebSocket**: `ws://localhost:8083` (for browser-based clients)
+- **TLS**: `mqtts://localhost:8883` (requires certificates from `certs/` directory)
+- **Secure WebSocket**: `wss://localhost:8084`
+
 ## Project Structure
 
 ```

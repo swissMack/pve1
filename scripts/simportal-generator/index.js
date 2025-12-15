@@ -27,7 +27,9 @@ const COMMAND_TOPICS = [
 ];
 
 // Load device configuration
-const configPath = join(__dirname, '../../config/simportal-devices.json');
+// In Docker: /app/config/simportal-devices.json (mounted volume)
+// Local dev: ../../config/simportal-devices.json (relative to script)
+const configPath = process.env.CONFIG_PATH || join(__dirname, '../../config/simportal-devices.json');
 let deviceConfig;
 try {
   deviceConfig = JSON.parse(readFileSync(configPath, 'utf-8'));

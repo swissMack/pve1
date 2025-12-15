@@ -1,7 +1,7 @@
 import { ref, reactive, onUnmounted } from 'vue'
 import mqtt from 'mqtt'
 
-export function useMqtt(brokerUrl = 'ws://192.168.1.199:8083/mqtt') {
+export function useMqtt(brokerUrl = 'ws://localhost:8083/mqtt') {
   const client = ref(null)
   const connected = ref(false)
   const connecting = ref(false)

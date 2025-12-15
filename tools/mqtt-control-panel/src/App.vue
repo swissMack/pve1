@@ -222,7 +222,7 @@ onMounted(() => {
     <!-- Footer -->
     <footer class="app-footer">
       <span>MQTT Control Panel v1.0</span>
-      <span>Connected to: ws://192.168.1.199:8083/mqtt</span>
+      <span>Connected to: ws://localhost:8083/mqtt</span>
     </footer>
 
     <!-- Info Dialog -->

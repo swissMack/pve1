@@ -141,7 +141,8 @@ function updateSensorState(state) {
     state.battery = Math.max(20, state.battery - 1);
   }
 
-  state.signalStrength = randomInt(50, 100);
+  // Signal strength varies slightly around current value (keeps user-set values)
+  state.signalStrength = Math.min(100, Math.max(0, state.signalStrength + randomInt(-2, 2)));
 }
 
 // Update device location (for mobile devices)
@@ -288,8 +289,12 @@ function handleDeviceCommand(deviceId, msg) {
         state.battery = msg.value;
       } else if (msg.field === 'light') {
         state.light = msg.value;
+      } else if (msg.field === 'signalStrength') {
+        state.signalStrength = msg.value;
       }
       console.log(`  Set ${msg.field} = ${msg.value}`);
+      // Immediately publish updated sensor data
+      publishSensorData(deviceId, state);
       break;
 
     case 'set_location':

@@ -327,9 +327,13 @@ onUnmounted(() => {
 
 .status-row {
   display: grid;
-  grid-template-columns: 1fr 1fr 250px;
+  grid-template-columns: 480px 1fr 250px;
   gap: 1rem;
   align-items: start;
+}
+
+.control-card {
+  min-width: 480px;
 }
 
 .card-header {

@@ -1,6 +1,6 @@
 import { ref, reactive, onUnmounted } from 'vue'
 
-const INFLUXDB_URL = 'http://192.168.1.199:8086'
+const INFLUXDB_URL = 'http://localhost:8086'
 const INFLUXDB_TOKEN = 'mqtt-influxdb-token'
 const INFLUXDB_ORG = 'mqtt-org'
 

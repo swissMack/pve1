@@ -48,7 +48,7 @@ function secondsToSlider(seconds) {
 }
 
 // Convert logarithmic slider position to seconds
-// Rounds to nearest whole hour when >= 1 hour, whole day when >= 1 day
+// Rounds to nearest whole day/hour/minute based on magnitude
 function sliderToSeconds(position) {
   const seconds = INTERVAL_MIN * Math.pow(INTERVAL_MAX / INTERVAL_MIN, position / SLIDER_MAX)
   if (seconds >= 86400) {
@@ -59,6 +59,10 @@ function sliderToSeconds(position) {
     // Round to nearest whole hour
     const hours = Math.round(seconds / 3600)
     return hours * 3600
+  } else if (seconds >= 60) {
+    // Round to nearest whole minute
+    const minutes = Math.round(seconds / 60)
+    return minutes * 60
   }
   return Math.round(seconds)
 }
@@ -163,7 +167,8 @@ function formatTime(timestamp) {
 }
 
 // Format interval in human-readable form
-// - Seconds up to 1 hour
+// - Seconds up to 1 minute
+// - Whole minutes from 1 minute to 1 hour
 // - Whole hours from 1 hour to 24 hours
 // - Whole days after 24 hours
 function formatInterval(seconds) {
@@ -175,8 +180,12 @@ function formatInterval(seconds) {
     // 1 hour to 24 hours: show in whole hours
     const hours = Math.round(seconds / 3600)
     return `${hours}h`
+  } else if (seconds >= 60) {
+    // 1 minute to 1 hour: show in whole minutes
+    const minutes = Math.round(seconds / 60)
+    return `${minutes}m`
   }
-  // Under 1 hour: show in seconds
+  // Under 1 minute: show in seconds
   return `${seconds}s`
 }
 </script>
@@ -261,11 +270,10 @@ function formatInterval(seconds) {
           <div class="control-label">
             <i class="pi pi-clock"></i>
             <span>Sensor Interval</span>
-            <span class="current-value interval-value">{{ formatInterval(sensorIntervalSeconds) }}</span>
           </div>
           <div class="control-input">
             <Slider v-model="intervalSliderValue" :min="0" :max="100" :step="0.5" class="flex-grow" />
-            <InputNumber v-model="sensorIntervalSeconds" :min="10" :max="604800" class="value-input" />
+            <span class="interval-display">{{ formatInterval(sensorIntervalSeconds) }}</span>
             <Button icon="pi pi-send" size="small" @click="sendSensorInterval" :disabled="!connected" text />
           </div>
         </div>
@@ -415,12 +423,15 @@ function formatInterval(seconds) {
   color: var(--p-primary-color);
 }
 
-.interval-value {
-  color: #f59e0b;
-  background: rgba(245, 158, 11, 0.1);
-  padding: 0.1rem 0.35rem;
-  border-radius: 3px;
-  font-size: 0.7rem;
+.interval-display {
+  width: 75px;
+  text-align: right;
+  padding: 0.2rem 0.35rem;
+  font-size: 0.75rem;
+  background: var(--p-form-field-background);
+  border: 1px solid var(--p-form-field-border-color);
+  border-radius: var(--p-form-field-border-radius);
+  color: var(--p-form-field-color);
 }
 
 .control-input {

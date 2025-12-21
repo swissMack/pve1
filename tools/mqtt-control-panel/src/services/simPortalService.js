@@ -101,7 +101,7 @@ export const simPortalService = {
         iccid,
         msisdn,
         status: response.data.status === 'ACTIVE' ? 'Active' : 'Inactive',
-        carrier: 'Swiss Telecom',
+        carrier: customData.carrier || 'IoTo Wireless',
         plan: customData.ratePlanId || 'IoT Standard',
         dataUsed: '0 MB',
         dataLimit: '1 GB',

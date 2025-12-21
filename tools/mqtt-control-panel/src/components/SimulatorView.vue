@@ -45,9 +45,27 @@ const newSimForm = ref({
   msisdn: '',
   apn: 'iot.simportal.ch',
   ratePlanId: 'plan_iot_standard',
+  carrier: 'IoTo Wireless',
   activateImmediately: true,
   expiryDate: getDefaultExpiryDate()
 })
+
+// Popular EU carriers (max 12) + IoTo Wireless
+const carriers = [
+  { label: 'IoTo Wireless', value: 'IoTo Wireless' },
+  { label: 'Swisscom (CH)', value: 'Swisscom' },
+  { label: 'Deutsche Telekom (DE)', value: 'Deutsche Telekom' },
+  { label: 'Vodafone (EU)', value: 'Vodafone' },
+  { label: 'Orange (FR)', value: 'Orange' },
+  { label: 'Telefonica/O2 (ES)', value: 'Telefonica' },
+  { label: 'KPN (NL)', value: 'KPN' },
+  { label: 'TIM (IT)', value: 'TIM' },
+  { label: 'Proximus (BE)', value: 'Proximus' },
+  { label: 'A1 Telekom (AT)', value: 'A1 Telekom' },
+  { label: 'Telenor (NO)', value: 'Telenor' },
+  { label: 'Telia (SE)', value: 'Telia' },
+  { label: 'Three (UK)', value: 'Three' }
+]
 
 const blockReasons = [
   { label: 'Manual Block', value: 'MANUAL' },
@@ -114,6 +132,7 @@ const createSim = async () => {
       msisdn: newSimForm.value.msisdn || undefined,
       apn: newSimForm.value.apn,
       ratePlanId: newSimForm.value.ratePlanId,
+      carrier: newSimForm.value.carrier,
       activateImmediately: newSimForm.value.activateImmediately,
       expiryDate: newSimForm.value.expiryDate || undefined
     })
@@ -124,6 +143,7 @@ const createSim = async () => {
       msisdn: '',
       apn: 'iot.simportal.ch',
       ratePlanId: 'plan_iot_standard',
+      carrier: 'IoTo Wireless',
       activateImmediately: true,
       expiryDate: getDefaultExpiryDate()
     }
@@ -541,6 +561,17 @@ onUnmounted(() => {
           <InputText
             v-model="newSimForm.ratePlanId"
             class="w-full"
+          />
+        </div>
+        <div>
+          <label class="block text-600 mb-1 text-sm">Carrier</label>
+          <Dropdown
+            v-model="newSimForm.carrier"
+            :options="carriers"
+            optionLabel="label"
+            optionValue="value"
+            class="w-full"
+            placeholder="Select carrier"
           />
         </div>
         <div>

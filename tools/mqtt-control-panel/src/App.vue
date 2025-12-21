@@ -8,6 +8,10 @@ import GlobalSettings from './components/GlobalSettings.vue'
 import DeviceCard from './components/DeviceCard.vue'
 import InfluxDashboard from './components/InfluxDashboard.vue'
 import SystemStatus from './components/SystemStatus.vue'
+import BillingView from './components/BillingView.vue'
+import ProvisioningView from './components/ProvisioningView.vue'
+import TestingView from './components/TestingView.vue'
+import SimulatorView from './components/SimulatorView.vue'
 import { useMqtt } from './composables/useMqtt'
 
 const showInfoDialog = ref(false)
@@ -118,6 +122,38 @@ onMounted(() => {
             <i class="pi pi-cog"></i>
             <span>System</span>
           </button>
+          <button
+            class="view-tab"
+            :class="{ active: activeView === 'billing' }"
+            @click="activeView = 'billing'"
+          >
+            <i class="pi pi-wallet"></i>
+            <span>Billing</span>
+          </button>
+          <button
+            class="view-tab"
+            :class="{ active: activeView === 'provisioning' }"
+            @click="activeView = 'provisioning'"
+          >
+            <i class="pi pi-mobile"></i>
+            <span>Provisioning</span>
+          </button>
+          <button
+            class="view-tab"
+            :class="{ active: activeView === 'testing' }"
+            @click="activeView = 'testing'"
+          >
+            <i class="pi pi-wrench"></i>
+            <span>Testing</span>
+          </button>
+          <button
+            class="view-tab"
+            :class="{ active: activeView === 'simulator' }"
+            @click="activeView = 'simulator'"
+          >
+            <i class="pi pi-bolt"></i>
+            <span>Simulator</span>
+          </button>
         </nav>
         <nav class="service-tabs">
           <button class="service-tab info-tab" @click="showInfoDialog = true" title="Architecture & Testing Info">
@@ -216,6 +252,26 @@ onMounted(() => {
       <!-- System Status View -->
       <template v-else-if="activeView === 'system'">
         <SystemStatus />
+      </template>
+
+      <!-- Billing View -->
+      <template v-else-if="activeView === 'billing'">
+        <BillingView />
+      </template>
+
+      <!-- Provisioning View -->
+      <template v-else-if="activeView === 'provisioning'">
+        <ProvisioningView />
+      </template>
+
+      <!-- Testing View -->
+      <template v-else-if="activeView === 'testing'">
+        <TestingView />
+      </template>
+
+      <!-- Simulator View -->
+      <template v-else-if="activeView === 'simulator'">
+        <SimulatorView />
       </template>
     </main>
 

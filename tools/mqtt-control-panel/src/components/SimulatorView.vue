@@ -20,6 +20,30 @@ const loading = ref(false)
 const creating = ref(false)
 const actionLoading = ref(null)
 
+// API logging state
+const apiLogs = ref([])
+const maxLogs = 50
+
+// Helper to log API calls
+const logApiCall = (method, endpoint, requestBody, response, status, error = null) => {
+  const log = {
+    id: Date.now(),
+    timestamp: new Date().toLocaleTimeString(),
+    method,
+    endpoint,
+    request: requestBody,
+    response: error ? { error: error.message || error } : response,
+    status,
+    isError: !!error
+  }
+  apiLogs.value = [log, ...apiLogs.value].slice(0, maxLogs)
+}
+
+// Clear logs
+const clearApiLogs = () => {
+  apiLogs.value = []
+}
+
 // Consumption generator state
 const generatorRunning = ref(false)
 const generatorInterval = ref(null)
@@ -127,15 +151,17 @@ const fetchSims = async () => {
 // Create new SIM
 const createSim = async () => {
   creating.value = true
+  const requestBody = {
+    msisdn: newSimForm.value.msisdn || undefined,
+    apn: newSimForm.value.apn,
+    ratePlanId: newSimForm.value.ratePlanId,
+    carrier: newSimForm.value.carrier,
+    activateImmediately: newSimForm.value.activateImmediately,
+    expiryDate: newSimForm.value.expiryDate || undefined
+  }
   try {
-    const result = await simPortalService.createSim({
-      msisdn: newSimForm.value.msisdn || undefined,
-      apn: newSimForm.value.apn,
-      ratePlanId: newSimForm.value.ratePlanId,
-      carrier: newSimForm.value.carrier,
-      activateImmediately: newSimForm.value.activateImmediately,
-      expiryDate: newSimForm.value.expiryDate || undefined
-    })
+    const result = await simPortalService.createSim(requestBody)
+    logApiCall('POST', '/api/v1/sims', requestBody, result, 201)
     showCreateDialog.value = false
     await fetchSims()
     // Reset form
@@ -149,6 +175,7 @@ const createSim = async () => {
     }
   } catch (err) {
     console.error('Failed to create SIM:', err)
+    logApiCall('POST', '/api/v1/sims', requestBody, null, err.response?.status || 500, err)
     portalError.value = err.response?.data?.error?.message || 'Failed to create SIM'
   } finally {
     creating.value = false
@@ -230,8 +257,21 @@ const generateConsumption = async () => {
 
   const records = []
   for (const sim of activeSims) {
+    // Build request body for logging
+    const now = new Date()
+    const periodStart = new Date(now.getTime() - 5 * 60 * 1000)
+    const usageData = simPortalService.generateRandomUsage()
+    const requestBody = {
+      iccid: sim.iccid,
+      periodStart: periodStart.toISOString(),
+      periodEnd: now.toISOString(),
+      usage: usageData,
+      source: 'mqtt-simulator'
+    }
+
     try {
-      const result = await simPortalService.submitUsage(sim.iccid)
+      const result = await simPortalService.submitUsage(sim.iccid, usageData)
+      logApiCall('POST', '/api/v1/usage', requestBody, result, 200)
       records.push({
         iccid: sim.iccid,
         status: result.status,
@@ -239,6 +279,7 @@ const generateConsumption = async () => {
         time: new Date().toLocaleTimeString()
       })
     } catch (err) {
+      logApiCall('POST', '/api/v1/usage', requestBody, null, err.response?.status || 500, err)
       records.push({
         iccid: sim.iccid,
         status: 'FAILED',
@@ -532,6 +573,68 @@ onUnmounted(() => {
       </div>
     </div>
 
+    <!-- API Logs Panel -->
+    <Card class="mt-4">
+      <template #title>
+        <div class="flex align-items-center justify-content-between">
+          <div class="flex align-items-center gap-2">
+            <i class="pi pi-code"></i>
+            API Call Logs
+          </div>
+          <Button
+            label="Clear Logs"
+            icon="pi pi-trash"
+            severity="secondary"
+            size="small"
+            :disabled="apiLogs.length === 0"
+            @click="clearApiLogs"
+          />
+        </div>
+      </template>
+      <template #content>
+        <div v-if="apiLogs.length === 0" class="text-600 text-center p-4">
+          No API calls logged yet. Create a SIM or generate consumption data to see logs.
+        </div>
+        <div v-else class="api-logs-container">
+          <div
+            v-for="log in apiLogs"
+            :key="log.id"
+            class="api-log-entry p-3 mb-3 border-round"
+            :class="{ 'log-error': log.isError, 'log-success': !log.isError }"
+          >
+            <div class="flex align-items-center justify-content-between mb-2">
+              <div class="flex align-items-center gap-2">
+                <Tag
+                  :value="log.method"
+                  :severity="log.method === 'POST' ? 'info' : log.method === 'GET' ? 'success' : 'warn'"
+                  class="text-xs"
+                />
+                <span class="font-mono text-sm font-semibold">{{ log.endpoint }}</span>
+              </div>
+              <div class="flex align-items-center gap-2">
+                <Tag
+                  :value="log.status"
+                  :severity="log.isError ? 'danger' : 'success'"
+                  class="text-xs"
+                />
+                <span class="text-500 text-xs">{{ log.timestamp }}</span>
+              </div>
+            </div>
+            <div class="grid">
+              <div class="col-6">
+                <div class="text-500 text-xs mb-1 font-semibold">REQUEST</div>
+                <pre class="log-json m-0 p-2 border-round text-xs">{{ JSON.stringify(log.request, null, 2) }}</pre>
+              </div>
+              <div class="col-6">
+                <div class="text-500 text-xs mb-1 font-semibold">RESPONSE</div>
+                <pre class="log-json m-0 p-2 border-round text-xs" :class="{ 'text-red-400': log.isError }">{{ JSON.stringify(log.response, null, 2) }}</pre>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
+    </Card>
+
     <!-- Create SIM Dialog -->
     <Dialog
       v-model:visible="showCreateDialog"
@@ -644,5 +747,36 @@ onUnmounted(() => {
 
 .record-item:last-child {
   border-bottom: none !important;
+}
+
+/* API Logs styles */
+.api-logs-container {
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.api-log-entry {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.api-log-entry.log-error {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.api-log-entry.log-success {
+  background: rgba(34, 197, 94, 0.05);
+  border-color: rgba(34, 197, 94, 0.2);
+}
+
+.log-json {
+  background: rgba(0, 0, 0, 0.3);
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 200px;
+  overflow-y: auto;
+  color: #a5d6ff;
 }
 </style>

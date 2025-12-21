@@ -1,0 +1,610 @@
+openapi: 3.1.0
+info:
+  title: Billing & Provisioning API
+  description: API consumed by the Billing & Provisioning Dashboard test suite
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:3001
+    description: Local development API server
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/v1/health:
+    get:
+      summary: Health Check
+      description: Check API server health status
+      operationId: healthCheck
+      security: []
+      tags: [Testing]
+      responses:
+        '200':
+          description: Server is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /api/v1/sims:
+    get:
+      summary: List SIMs
+      description: Search and filter SIM provisioning tasks
+      operationId: listSims
+      tags: [Provisioning]
+      parameters:
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/SimStatus'
+        - name: iccid
+          in: query
+          schema:
+            type: string
+        - name: customerId
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of SIMs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimListResponse'
+
+  /api/v1/sims/{simId}:
+    get:
+      summary: Get SIM Details
+      description: Retrieve detailed information about a specific SIM
+      operationId: getSim
+      tags: [Provisioning]
+      parameters:
+        - name: simId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: SIM details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sim'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/sims/{simId}/block:
+    post:
+      summary: Block SIM
+      description: Block a SIM with a specified reason
+      operationId: blockSim
+      tags: [Provisioning]
+      parameters:
+        - name: simId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BlockRequest'
+      responses:
+        '200':
+          description: SIM blocked successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sim'
+        '409':
+          $ref: '#/components/responses/InvalidStateTransition'
+
+  /api/v1/sims/{simId}/unblock:
+    post:
+      summary: Unblock SIM
+      description: Unblock a blocked SIM
+      operationId: unblockSim
+      tags: [Provisioning]
+      parameters:
+        - name: simId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UnblockRequest'
+      responses:
+        '200':
+          description: SIM unblocked successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sim'
+        '409':
+          $ref: '#/components/responses/InvalidStateTransition'
+
+  /api/v1/usage:
+    post:
+      summary: Submit Usage Record
+      description: Submit a single mediation usage record
+      operationId: submitUsage
+      tags: [Mediation]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UsageRecord'
+      responses:
+        '202':
+          description: Usage record accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsageResponse'
+
+  /api/consumption/invoices:
+    get:
+      summary: List Invoices
+      description: Retrieve invoices with optional filters
+      operationId: listInvoices
+      tags: [Billing]
+      parameters:
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/InvoiceStatus'
+        - name: carrier_id
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          description: List of invoices
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceListResponse'
+
+  /api/consumption/kpis:
+    get:
+      summary: Get KPIs
+      description: Retrieve consumption KPI dashboard data
+      operationId: getKpis
+      tags: [Analytics]
+      responses:
+        '200':
+          description: KPI data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KpiResponse'
+
+  /api/consumption/trends:
+    get:
+      summary: Get Consumption Trends
+      description: Retrieve time-series consumption data
+      operationId: getTrends
+      tags: [Analytics]
+      parameters:
+        - name: granularity
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [hourly, daily, weekly, monthly]
+      responses:
+        '200':
+          description: Trend data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrendResponse'
+
+  /api/consumption/carriers:
+    get:
+      summary: Get Carrier Breakdown
+      description: Retrieve consumption breakdown by carrier
+      operationId: getCarriers
+      tags: [Analytics]
+      responses:
+        '200':
+          description: Carrier breakdown data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CarrierResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: API key authentication
+
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: healthy
+        timestamp:
+          type: string
+          format: date-time
+
+    SimStatus:
+      type: string
+      enum: [PROVISIONED, ACTIVE, INACTIVE, BLOCKED]
+
+    BlockReason:
+      type: string
+      enum:
+        - USAGE_THRESHOLD_EXCEEDED
+        - FRAUD_SUSPECTED
+        - BILLING_ISSUE
+        - CUSTOMER_REQUEST
+        - POLICY_VIOLATION
+        - MANUAL
+
+    Sim:
+      type: object
+      required: [simId, iccid, imsi, msisdn, status, createdAt, updatedAt]
+      properties:
+        simId:
+          type: string
+        iccid:
+          type: string
+          pattern: '^[0-9]{19,20}$'
+        imsi:
+          type: string
+          pattern: '^[0-9]{15}$'
+        msisdn:
+          type: string
+          pattern: '^\+[0-9]{7,15}$'
+        imei:
+          type: string
+          pattern: '^[0-9]{15}$'
+        status:
+          $ref: '#/components/schemas/SimStatus'
+        profile:
+          $ref: '#/components/schemas/SimProfile'
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        blockReason:
+          $ref: '#/components/schemas/BlockReason'
+        blockNotes:
+          type: string
+        blockedAt:
+          type: string
+          format: date-time
+        blockedBy:
+          type: string
+
+    SimProfile:
+      type: object
+      properties:
+        apn:
+          type: string
+        ratePlanId:
+          type: string
+        dataLimit:
+          type: integer
+        billingAccountId:
+          type: string
+        customerId:
+          type: string
+
+    SimListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Sim'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    BlockRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          $ref: '#/components/schemas/BlockReason'
+        notes:
+          type: string
+        correlationId:
+          type: string
+
+    UnblockRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          default: MANUAL
+        notes:
+          type: string
+        correlationId:
+          type: string
+
+    UsageRecord:
+      type: object
+      required: [iccid, periodStart, periodEnd, usage, recordId]
+      properties:
+        iccid:
+          type: string
+        periodStart:
+          type: string
+          format: date-time
+        periodEnd:
+          type: string
+          format: date-time
+        usage:
+          $ref: '#/components/schemas/UsageMetrics'
+        source:
+          type: string
+        recordId:
+          type: string
+
+    UsageMetrics:
+      type: object
+      required: [totalBytes]
+      properties:
+        dataUploadBytes:
+          type: integer
+        dataDownloadBytes:
+          type: integer
+        totalBytes:
+          type: integer
+        smsCount:
+          type: integer
+        voiceSeconds:
+          type: integer
+
+    UsageResponse:
+      type: object
+      properties:
+        recordId:
+          type: string
+        status:
+          type: string
+          enum: [ACCEPTED, DUPLICATE]
+        processedAt:
+          type: string
+          format: date-time
+
+    InvoiceStatus:
+      type: string
+      enum: [pending, paid, overdue, disputed]
+
+    Invoice:
+      type: object
+      properties:
+        id:
+          type: string
+        invoiceNumber:
+          type: string
+        carrierId:
+          type: string
+        carrierName:
+          type: string
+        periodStart:
+          type: string
+          format: date
+        periodEnd:
+          type: string
+          format: date
+        totalAmount:
+          type: number
+        currency:
+          type: string
+        status:
+          $ref: '#/components/schemas/InvoiceStatus'
+        dueDate:
+          type: string
+          format: date
+        paidDate:
+          type: string
+          format: date
+          nullable: true
+        pdfUrl:
+          type: string
+          nullable: true
+        erpnextReference:
+          type: string
+          nullable: true
+
+    InvoiceListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Invoice'
+        pagination:
+          $ref: '#/components/schemas/PagePagination'
+
+    KpiResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          $ref: '#/components/schemas/KpiData'
+
+    KpiData:
+      type: object
+      properties:
+        totalSpend:
+          type: number
+        totalSpendTrend:
+          type: number
+        dataUsageGB:
+          type: number
+        dataUsageTrend:
+          type: number
+        activeSims:
+          type: integer
+        activeSimsTrend:
+          type: number
+        avgCostPerSim:
+          type: number
+
+    TrendResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TrendPoint'
+        granularity:
+          type: string
+
+    TrendPoint:
+      type: object
+      properties:
+        period:
+          type: string
+        dataUsageGB:
+          type: number
+        cost:
+          type: number
+        simCount:
+          type: integer
+
+    CarrierResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CarrierData'
+
+    CarrierData:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        dataUsageGB:
+          type: number
+        cost:
+          type: number
+        costPercentage:
+          type: number
+        dataPercentage:
+          type: number
+
+    Pagination:
+      type: object
+      properties:
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+        hasMore:
+          type: boolean
+
+    PagePagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        totalPages:
+          type: integer
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+
+  responses:
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: NOT_FOUND
+              message: Resource not found
+
+    InvalidStateTransition:
+      description: Invalid state transition
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: INVALID_STATE_TRANSITION
+              message: Cannot perform this action on resource in current state
+
+tags:
+  - name: Testing
+    description: API health and testing endpoints
+  - name: Provisioning
+    description: SIM provisioning and lifecycle management
+  - name: Billing
+    description: Invoice management
+  - name: Mediation
+    description: Usage data submission
+  - name: Analytics
+    description: Consumption analytics and KPIs

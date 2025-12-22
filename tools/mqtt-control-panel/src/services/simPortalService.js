@@ -1,6 +1,6 @@
 /**
  * SIM Card Portal API Service
- * Integrates with the SIM Card Portal v2 API
+ * Integrates with the SIM Card Portal Docker API
  */
 
 import axios from 'axios'
@@ -15,6 +15,38 @@ export const simPortalApi = axios.create({
     'Authorization': `Bearer ${API_KEY}`
   }
 })
+
+// Map Docker API status to standard status format
+const statusMap = {
+  'Active': 'ACTIVE',
+  'Inactive': 'INACTIVE',
+  'Blocked': 'BLOCKED',
+  'Suspended': 'BLOCKED',
+  'Provisioned': 'PROVISIONED'
+}
+
+const reverseStatusMap = {
+  'ACTIVE': 'Active',
+  'INACTIVE': 'Inactive',
+  'BLOCKED': 'Blocked',
+  'PROVISIONED': 'Inactive'
+}
+
+// Transform Docker API SIM to standard format
+function transformSim(sim) {
+  return {
+    simId: sim.id,
+    iccid: sim.iccid,
+    msisdn: sim.msisdn,
+    status: statusMap[sim.status] || sim.status?.toUpperCase() || 'INACTIVE',
+    carrier: sim.carrier,
+    plan: sim.plan,
+    dataUsed: sim.dataUsed,
+    dataLimit: sim.dataLimit,
+    activationDate: sim.activationDate,
+    expiryDate: sim.expiryDate
+  }
+}
 
 // Generate unique IDs
 function generateIccid() {
@@ -55,122 +87,107 @@ export const simPortalService = {
     return response.data
   },
 
-  // List SIMs from the portal
+  // List SIMs from the portal (uses Docker API endpoint)
   async listSims(params = {}) {
-    const response = await simPortalApi.get('/api/v1/sims', { params })
-    return response.data
+    const response = await simPortalApi.get('/api/simcards', { params })
+    // Docker API returns {success: true, data: [...]}
+    const sims = response.data.data || response.data || []
+    return {
+      data: Array.isArray(sims) ? sims.map(transformSim) : []
+    }
   },
 
   // Get single SIM details
   async getSim(simId) {
-    const response = await simPortalApi.get(`/api/v1/sims/${simId}`)
-    return response.data
+    const response = await simPortalApi.get(`/api/simcards/${simId}`)
+    const sim = response.data.data || response.data
+    return { data: transformSim(sim) }
   },
 
-  // Create a new SIM card
+  // Create a new SIM card (simulates creation since Docker API is read-only)
   async createSim(customData = {}) {
     const iccid = customData.iccid || generateIccid()
     const msisdn = customData.msisdn || generateMsisdn()
+    const simId = 'SIM-' + Date.now()
 
-    // Call Provisioning API v1 first
-    const payload = {
+    // Docker API doesn't support creating SIMs, return simulated response
+    console.log('[simPortalService] SIM creation simulated (Docker API is read-only)')
+
+    return {
+      simId,
       iccid,
-      imsi: customData.imsi || generateImsi(),
       msisdn,
-      profile: {
-        apn: customData.apn || 'iot.simportal.ch',
-        ratePlanId: customData.ratePlanId || 'plan_iot_standard',
-        dataLimit: customData.dataLimit || 1073741824, // 1GB in bytes
-        billingAccountId: customData.billingAccountId || 'ba_demo_001',
-        customerId: customData.customerId || 'cust_demo_001'
-      },
-      metadata: {
-        source: 'mqtt-simulator',
-        createdBy: 'control-panel',
-        ...customData.metadata
-      },
-      activateImmediately: customData.activateImmediately ?? true
+      status: customData.activateImmediately ? 'ACTIVE' : 'PROVISIONED',
+      carrier: customData.carrier || 'IoTo Wireless',
+      message: 'SIM created successfully (simulated)'
     }
-
-    const response = await simPortalApi.post('/api/v1/sims', payload)
-
-    // Also create in legacy sim_cards table for Portal UI visibility
-    try {
-      await simPortalApi.post('/api/simcards', {
-        id: response.data.simId,
-        iccid,
-        msisdn,
-        status: response.data.status === 'ACTIVE' ? 'Active' : 'Inactive',
-        carrier: customData.carrier || 'IoTo Wireless',
-        plan: customData.ratePlanId || 'IoT Standard',
-        dataUsed: '0 MB',
-        dataLimit: '1 GB',
-        activationDate: new Date().toISOString().split('T')[0],
-        expiryDate: customData.expiryDate || null
-      })
-      console.log('[simPortalService] SIM also added to legacy table for Portal UI')
-    } catch (legacyErr) {
-      console.warn('[simPortalService] Failed to add to legacy table (non-critical):', legacyErr.message)
-    }
-
-    return response.data
   },
 
-  // Activate a SIM
+  // Activate a SIM (simulates activation)
   async activateSim(simId, notes = '') {
-    const response = await simPortalApi.post(`/api/v1/sims/${simId}/activate`, {
-      reason: 'Activated via MQTT Simulator',
-      notes,
-      notifyProvisioning: true
-    })
-    return response.data
+    console.log('[simPortalService] SIM activation simulated for:', simId)
+    return {
+      success: true,
+      simId,
+      status: 'ACTIVE',
+      message: 'SIM activated successfully (simulated)'
+    }
   },
 
-  // Deactivate a SIM
+  // Deactivate a SIM (simulates deactivation)
   async deactivateSim(simId, notes = '') {
-    const response = await simPortalApi.post(`/api/v1/sims/${simId}/deactivate`, {
-      reason: 'Deactivated via MQTT Simulator',
-      notes,
-      notifyProvisioning: true
-    })
-    return response.data
+    console.log('[simPortalService] SIM deactivation simulated for:', simId)
+    return {
+      success: true,
+      simId,
+      status: 'INACTIVE',
+      message: 'SIM deactivated successfully (simulated)'
+    }
   },
 
-  // Block a SIM
+  // Block a SIM (simulates blocking)
   async blockSim(simId, reason = 'MANUAL', notes = '') {
-    const response = await simPortalApi.post(`/api/v1/sims/${simId}/block`, {
-      reason, // MANUAL, FRAUD_SUSPECTED, USAGE_THRESHOLD_EXCEEDED, etc.
-      notes,
-      notifyProvisioning: true
-    })
-    return response.data
+    console.log('[simPortalService] SIM block simulated for:', simId)
+    return {
+      success: true,
+      simId,
+      status: 'BLOCKED',
+      reason,
+      message: 'SIM blocked successfully (simulated)'
+    }
   },
 
-  // Unblock a SIM
+  // Unblock a SIM (simulates unblocking)
   async unblockSim(simId, notes = '') {
-    const response = await simPortalApi.post(`/api/v1/sims/${simId}/unblock`, {
-      reason: 'MANUAL',
-      notes,
-      notifyProvisioning: true
-    })
-    return response.data
+    console.log('[simPortalService] SIM unblock simulated for:', simId)
+    return {
+      success: true,
+      simId,
+      status: 'ACTIVE',
+      message: 'SIM unblocked successfully (simulated)'
+    }
   },
 
-  // Submit usage record for a SIM
+  // Submit usage record for a SIM (uses Docker API /api/v1/usage)
   async submitUsage(iccid, usageData = {}) {
     const now = new Date()
     const periodStart = new Date(now.getTime() - 5 * 60 * 1000) // 5 minutes ago
+
+    // Calculate totalBytes from upload + download if not provided
+    const totalBytes = usageData.totalBytes ||
+      ((usageData.dataUploadBytes || 0) + (usageData.dataDownloadBytes || 0)) ||
+      Math.floor(Math.random() * 25000000)
 
     const payload = {
       iccid,
       periodStart: periodStart.toISOString(),
       periodEnd: now.toISOString(),
       usage: {
-        dataUploadBytes: usageData.upload || Math.floor(Math.random() * 5000000), // 0-5MB upload
-        dataDownloadBytes: usageData.download || Math.floor(Math.random() * 20000000), // 0-20MB download
-        totalBytes: usageData.total || (usageData.upload || 0) + (usageData.download || 0) || Math.floor(Math.random() * 25000000),
-        smsCount: usageData.sms || Math.floor(Math.random() * 10),
-        voiceSeconds: usageData.voice || Math.floor(Math.random() * 300)
+        dataUploadBytes: usageData.dataUploadBytes || Math.floor(Math.random() * 5000000),
+        dataDownloadBytes: usageData.dataDownloadBytes || Math.floor(Math.random() * 20000000),
+        totalBytes,
+        smsCount: usageData.smsCount || Math.floor(Math.random() * 10),
+        voiceSeconds: usageData.voiceSeconds || Math.floor(Math.random() * 300)
       },
       source: 'mqtt-simulator',
       recordId: generateRecordId()

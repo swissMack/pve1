@@ -369,7 +369,7 @@ onUnmounted(() => {
             <i :class="['pi', portalConnected ? 'pi-check-circle text-green-500' : 'pi-times-circle text-red-500']" style="font-size: 1.5rem"></i>
             <div>
               <div class="font-semibold">SIM Card Portal Connection</div>
-              <div class="text-600 text-sm">{{ portalConnected ? 'Connected to localhost:3001' : 'Not connected' }}</div>
+              <div class="text-600 text-sm">{{ portalConnected ? 'Connected to 192.168.1.59:3001' : 'Not connected' }}</div>
             </div>
           </div>
           <Button

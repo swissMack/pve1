@@ -287,8 +287,8 @@ const loadSensorData = async () => {
     const startDateISO = startDate.toISOString()
     const endDateISO = new Date().toISOString()
 
-    // Use local API server or production API
-    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+    // Use relative URL (works with nginx proxy)
+    const apiBase = ''
     const apiUrl = `${apiBase}/api/device-sensor-history?device_id=${props.deviceId}&start_date=${startDateISO}&end_date=${endDateISO}&limit=1000`
 
     const response = await fetch(apiUrl)

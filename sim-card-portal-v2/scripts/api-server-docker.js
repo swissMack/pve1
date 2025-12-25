@@ -1240,13 +1240,124 @@ app.post('/api/llm/chat', async (req, res) => {
   }
 })
 
-// POST /api/llm/chart - Generate chart from natural language (stub for now)
+// POST /api/llm/chart - Generate chart configuration from natural language
 app.post('/api/llm/chart', async (req, res) => {
-  res.json({
-    success: true,
-    chartConfig: null,
-    message: 'Chart generation not yet implemented'
-  })
+  try {
+    const { query, dateRange, currency = 'CHF' } = req.body
+
+    if (!query) {
+      return res.status(400).json({ success: false, error: 'Query is required' })
+    }
+
+    // Check if Anthropic is configured
+    if (!anthropic) {
+      return res.status(500).json({ success: false, error: 'LLM service not configured. Please set ANTHROPIC_API_KEY.' })
+    }
+
+    // Build context with available data
+    let dataContext = ''
+
+    try {
+      // Get carriers
+      const carriersResult = await pool.query(`SELECT id, name FROM ${SCHEMA}carriers`)
+      if (carriersResult.rows.length > 0) {
+        dataContext += `\nCarriers: ${carriersResult.rows.map(c => c.name).join(', ')}`
+      }
+
+      // Get recent usage data
+      const usageResult = await pool.query(`
+        SELECT usage_date, carrier_id, data_bytes, cost
+        FROM ${SCHEMA}daily_usage
+        ORDER BY usage_date DESC
+        LIMIT 20
+      `)
+
+      if (usageResult.rows.length > 0) {
+        dataContext += `\n\nRecent usage data (last ${usageResult.rows.length} records):\n`
+        usageResult.rows.forEach(a => {
+          dataContext += `- ${a.usage_date}: carrier=${a.carrier_id}, data=${(parseFloat(a.data_bytes || 0) / (1024*1024*1024)).toFixed(2)}GB, cost=${a.cost} ${currency}\n`
+        })
+      }
+    } catch (dbErr) {
+      console.error('Error fetching chart context data:', dbErr.message)
+    }
+
+    const systemPrompt = `You are Bob, a data analyst for SIM card usage analytics.
+
+Available data:${dataContext}
+
+IMPORTANT: All costs should be displayed in ${currency} (the user's configured currency).
+
+When the user asks for data visualization, respond with ONLY a valid JSON object (no markdown, no explanation) in this exact format:
+{
+  "type": "chart" | "table" | "text",
+  "chartType": "bar" | "line" | "pie" | "doughnut" (only if type is "chart"),
+  "title": "Chart title",
+  "data": {
+    "labels": ["Label1", "Label2"],
+    "datasets": [{
+      "label": "Dataset name",
+      "data": [10, 20],
+      "backgroundColor": ["#137fec", "#10b981"]
+    }]
+  }
+}
+
+For tables:
+{
+  "type": "table",
+  "title": "Table title",
+  "columns": ["Column1", "Column2"],
+  "rows": [["Value1", "Value2"]]
+}
+
+For text responses:
+{
+  "type": "text",
+  "content": "Your response here"
+}
+
+IMPORTANT: For questions that involve strategic decisions, optimization suggestions, complex analysis, cost reduction strategies, carrier comparisons, deployment recommendations, or any topic where professional consultation would be valuable, ALWAYS end your response with this exact text:
+
+"For expert guidance on optimizing your IoT deployment, our IoTo consultants can help. Would you like an IoTo representative to reach out to discuss your needs? Press the 'Contact IoTo' button below to initiate the request."
+
+When labeling cost-related data, always use "${currency}" as the currency code.
+
+Current date: ${new Date().toISOString().split('T')[0]}
+${dateRange ? `Date range: ${dateRange.start} to ${dateRange.end}` : ''}`
+
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1024,
+      system: systemPrompt,
+      messages: [
+        { role: 'user', content: query }
+      ]
+    })
+
+    const responseText = response.content[0].text
+
+    // Try to parse the JSON response
+    try {
+      const chartConfig = JSON.parse(responseText)
+      res.json({ success: true, data: chartConfig })
+    } catch {
+      // If not valid JSON, return as text response
+      res.json({
+        success: true,
+        data: {
+          type: 'text',
+          content: responseText
+        }
+      })
+    }
+  } catch (error) {
+    console.error('Error generating chart:', error)
+    if (error.status === 401) {
+      return res.status(500).json({ success: false, error: 'API key not configured. Please set ANTHROPIC_API_KEY.' })
+    }
+    res.status(500).json({ success: false, error: 'Failed to generate chart: ' + error.message })
+  }
 })
 
 // POST /api/llm/execute - Execute AI-suggested actions (stub for now)

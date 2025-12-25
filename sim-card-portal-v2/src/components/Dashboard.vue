@@ -7,7 +7,7 @@ import SIMCardManagement from './SIMCardManagement.vue'
 import ConsumptionPage from './consumption/ConsumptionPage.vue'
 import UserSettings from './UserSettings.vue'
 import AboutPage from './AboutPage.vue'
-import LLMChat from './LLMChat.vue'
+import AskBobPane from './consumption/AskBobPane.vue'
 
 // User type definition
 interface User {
@@ -27,6 +27,13 @@ const currentPage = ref('dashboard')
 
 // LLM enabled state (controlled by Super Admin)
 const llmEnabled = ref(false)
+
+// Ask Bob state
+const showAskBob = ref(false)
+const dateRange = ref({
+  start: new Date(new Date().getFullYear(), new Date().getMonth() - 5, 1).toISOString().split('T')[0],
+  end: new Date().toISOString().split('T')[0]
+})
 
 const loadLLMEnabled = () => {
   const stored = localStorage.getItem('sim-portal-llm-enabled')
@@ -53,11 +60,8 @@ const handleRefresh = () => {
   window.location.reload()
 }
 
-// Handle LLM action executed - refresh relevant data
-const handleLLMActionExecuted = (result: unknown) => {
-  console.log('LLM action executed:', result)
-  // Optionally refresh the page or specific data
-  // For now, we'll just log it - the user can refresh if needed
+const toggleAskBob = () => {
+  showAskBob.value = !showAskBob.value
 }
 </script>
 
@@ -80,17 +84,23 @@ const handleLLMActionExecuted = (result: unknown) => {
           {{ currentPage === 'dashboard' ? 'System Overview' : currentPage === 'devices' ? 'Device Management' : currentPage === 'sim-cards' ? 'SIM Management' : currentPage === 'consumption' ? 'Consumption Analytics' : currentPage === 'settings' ? 'User Settings' : currentPage === 'about' ? 'About IoTo' : 'Support' }}
         </h2>
 
-        <!-- Ask Bob Search Bar (centered, takes available space) - only shown when LLM is enabled -->
-        <LLMChat
-          v-if="llmEnabled"
-          :userContext="props.currentUser ? { username: props.currentUser.username, role: props.currentUser.role, email: props.currentUser.email } : null"
-          @actionExecuted="handleLLMActionExecuted"
-        />
-        <!-- Spacer when LLM is disabled to maintain layout -->
-        <div v-else class="flex-1"></div>
+        <!-- Spacer to push actions to the right -->
+        <div class="flex-1"></div>
 
         <!-- Right side actions -->
         <div class="flex items-center gap-2 shrink-0">
+          <!-- Ask Bob button (only when LLM is enabled and not on consumption page) -->
+          <button
+            v-if="llmEnabled && currentPage !== 'consumption'"
+            @click="toggleAskBob"
+            :class="[
+              'flex items-center gap-2 px-4 py-2 rounded-lg transition-colors',
+              showAskBob ? 'bg-primary text-white' : 'bg-primary/10 text-primary hover:bg-primary/20'
+            ]"
+          >
+            <span class="material-symbols-outlined text-[18px]">smart_toy</span>
+            <span class="hidden sm:inline">Ask Bob</span>
+          </button>
           <button @click="handleRefresh" class="flex items-center gap-2 px-3 py-1.5 bg-primary text-white text-sm font-semibold rounded-lg hover:bg-blue-600 transition-colors shadow-sm shadow-blue-500/20">
             <span class="material-symbols-outlined text-[18px]">refresh</span>
             <span class="hidden sm:inline">Refresh</span>
@@ -403,9 +413,28 @@ const handleLLMActionExecuted = (result: unknown) => {
         </div>
       </div>
     </main>
+
+    <!-- Global Ask Bob Side Panel -->
+    <Transition name="slide">
+      <div
+        v-if="showAskBob && llmEnabled && currentPage !== 'consumption'"
+        class="fixed right-0 top-[64px] bottom-0 w-full lg:w-[400px] bg-surface-dark border-l border-border-dark z-[9999] flex flex-col"
+      >
+        <AskBobPane :dateRange="dateRange" @close="showAskBob = false" />
+      </div>
+    </Transition>
   </div>
 </template>
 
 <style scoped>
-/* Additional styles if needed */
+/* Ask Bob slide animation */
+.slide-enter-active,
+.slide-leave-active {
+  transition: transform 0.3s ease;
+}
+
+.slide-enter-from,
+.slide-leave-to {
+  transform: translateX(100%);
+}
 </style>

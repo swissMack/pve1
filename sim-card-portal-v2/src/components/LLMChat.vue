@@ -41,8 +41,8 @@ const messages = ref<Message[]>([])
 const messagesContainer = ref<HTMLElement | null>(null)
 const copiedMessageId = ref<string | null>(null)
 
-// API base URL
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+// Use relative API URLs (works with nginx proxy)
+const API_BASE = ''
 
 // Scroll to bottom of messages
 const scrollToBottom = () => {
@@ -74,18 +74,23 @@ const sendMessage = async () => {
   }
 
   messages.value.push(userMessage)
-  const messageText = inputMessage.value.trim()
   inputMessage.value = ''
   isLoading.value = true
   showResponse.value = true
 
   try {
+    // Build messages array including conversation history
+    const apiMessages = messages.value.map(m => ({
+      role: m.role,
+      content: m.content
+    }))
+
     const response = await fetch(`${API_BASE}/api/llm/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        message: messageText,
-        userContext: props.userContext
+        messages: apiMessages,
+        context: props.userContext
       })
     })
 

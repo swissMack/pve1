@@ -3,25 +3,18 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Download esbuild binary directly (no npm postinstall)
-RUN wget -O /tmp/esbuild.tgz https://registry.npmjs.org/@esbuild/linux-x64/-/linux-x64-0.25.5.tgz &&     mkdir -p /usr/local/lib/esbuild &&     tar -xzf /tmp/esbuild.tgz -C /usr/local/lib/esbuild --strip-components=1 &&     chmod +x /usr/local/lib/esbuild/bin/esbuild &&     ln -s /usr/local/lib/esbuild/bin/esbuild /usr/local/bin/esbuild &&     rm /tmp/esbuild.tgz
-
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies without running scripts
-RUN npm install --ignore-scripts
-
-# Link esbuild to node_modules
-RUN mkdir -p node_modules/esbuild/bin node_modules/.bin &&     ln -sf /usr/local/bin/esbuild node_modules/esbuild/bin/esbuild &&     ln -sf /usr/local/bin/esbuild node_modules/.bin/esbuild
+# Install dependencies (allow postinstall scripts for esbuild)
+RUN npm install
 
 # Copy source code
 COPY . .
 
-# Set environment variables
+# Set environment variables for build
 ENV VITE_USE_API=true
 ENV VITE_WEBSOCKET_URL=ws://localhost:3002/ws
-ENV VITE_API_URL=http://localhost:3001
 
 # Build
 RUN npm run build
@@ -29,6 +22,7 @@ RUN npm run build
 # Production stage
 FROM nginx:alpine
 COPY --from=builder /app/dist /usr/share/nginx/html
-COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
+COPY docker/nginx.conf /etc/nginx/nginx.conf
 EXPOSE 80
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3   CMD wget --no-verbose --tries=1 --spider http://localhost/ || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost/ || exit 1

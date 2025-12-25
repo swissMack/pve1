@@ -46,6 +46,11 @@ const deviceList = computed(() => {
   return Object.values(devices)
 })
 
+// Dynamic hostname for display
+const currentHostname = computed(() => {
+  return typeof window !== 'undefined' ? window.location.hostname : 'localhost'
+})
+
 // Event handlers
 function handleSetSensor(deviceId, field, value) {
   setSensorValue(deviceId, field, value)
@@ -278,7 +283,7 @@ onMounted(() => {
     <!-- Footer -->
     <footer class="app-footer">
       <span>MQTT Control Panel v1.0</span>
-      <span>Connected to: ws://localhost:8083/mqtt</span>
+      <span>Connected to: ws://{{ currentHostname }}:8083/mqtt</span>
     </footer>
 
     <!-- Info Dialog -->

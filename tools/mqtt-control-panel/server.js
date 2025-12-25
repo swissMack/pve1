@@ -103,8 +103,12 @@ initMqttClient()
 app.use(cors())
 app.use(express.json())
 
-// Docker project directory
-const DOCKER_DIR = process.env.DOCKER_DIR || '/Users/mackmood/MQTTServer/docker'
+// Docker project directory - auto-detect based on platform
+const DOCKER_DIR = process.env.DOCKER_DIR || (
+  process.platform === 'darwin'
+    ? '/Users/mackmood/MQTTServer/docker'
+    : '/root/MQTTServer/docker'  // Linux/Proxmox path
+)
 
 // Execute docker compose command
 async function dockerCompose(command) {

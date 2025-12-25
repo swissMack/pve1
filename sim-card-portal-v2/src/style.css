@@ -1,0 +1,218 @@
+@import "tailwindcss";
+
+@theme {
+  /* Custom colors for IoT Command Center */
+  --color-primary: #137fec;
+  --color-background-light: #f6f7f8;
+  --color-background-dark: #101922;
+  --color-surface-dark: #18222c;
+  --color-surface-dark-highlight: #202b36;
+  --color-border-dark: #283039;
+  --color-text-secondary: #9faab6;
+
+  /* Font family */
+  --font-family-display: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+:root {
+  /* CSS Variables for JS access */
+  --primary: #137fec;
+  --background-light: #f6f7f8;
+  --background-dark: #101922;
+  --surface-dark: #18222c;
+  --surface-dark-highlight: #202b36;
+  --border-dark: #283039;
+  --text-secondary: #9faab6;
+
+  /* Legacy JT colors for backwards compatibility */
+  --jt-primary-blue: #137fec;
+  --jt-secondary-blue: #1a90ff;
+  --jt-light-blue: #e8f4f8;
+  --jt-dark-blue: #101922;
+  --jt-accent-blue: #4a90c2;
+  --jt-gray-50: #f8f9fa;
+  --jt-gray-100: #f1f3f4;
+  --jt-gray-200: #283039;
+  --jt-gray-300: #3b4754;
+  --jt-gray-400: #55606e;
+  --jt-gray-500: #6c757d;
+  --jt-gray-600: #9faab6;
+  --jt-gray-700: #c1c9d2;
+  --jt-gray-800: #e9ecef;
+  --jt-gray-900: #f8f9fa;
+  --jt-success: #10b981;
+  --jt-warning: #f59e0b;
+  --jt-danger: #ef4444;
+  --jt-white: #ffffff;
+
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color-scheme: dark;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background-color: var(--background-dark);
+  color: white;
+}
+
+#app {
+  width: 100%;
+  height: 100vh;
+}
+
+/* Custom Scrollbar for dark mode */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--background-dark);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-dark);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3b4754;
+}
+
+/* Material Symbols base styles */
+.material-symbols-outlined {
+  font-variation-settings:
+    'FILL' 0,
+    'wght' 400,
+    'GRAD' 0,
+    'opsz' 24;
+}
+
+/* Filled icon variant */
+.material-symbols-outlined.fill-1 {
+  font-variation-settings:
+    'FILL' 1,
+    'wght' 400,
+    'GRAD' 0,
+    'opsz' 24;
+}
+
+/* Animation keyframes */
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.33);
+    opacity: 1;
+  }
+  80%, 100% {
+    opacity: 0;
+  }
+}
+
+.pulse-ring::before {
+  content: '';
+  position: absolute;
+  left: -12px;
+  top: -12px;
+  height: 48px;
+  width: 48px;
+  border-radius: 50%;
+  background-color: rgba(19, 127, 236, 0.4);
+  animation: pulse-ring 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+}
+
+/* Hide scrollbar utility */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Legacy button styles removed - using Tailwind instead */
+a {
+  font-weight: 500;
+  color: var(--primary);
+  text-decoration: inherit;
+}
+
+a:hover {
+  color: var(--jt-secondary-blue);
+}
+
+/* PrimeVue Select/Dropdown Overlay Panel - Dark Theme */
+.p-select-overlay {
+  background: var(--surface-dark, #18222c) !important;
+  border: 1px solid var(--border-dark, #283039) !important;
+  border-radius: 0.5rem !important;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5) !important;
+}
+
+.p-select-overlay .p-select-list {
+  padding: 0.25rem !important;
+}
+
+.p-select-overlay .p-select-option {
+  color: var(--text-secondary, #9faab6) !important;
+  padding: 0.625rem 0.75rem !important;
+  border-radius: 0.375rem !important;
+  margin: 0.125rem 0 !important;
+}
+
+.p-select-overlay .p-select-option:hover {
+  background: var(--surface-dark-highlight, #202b36) !important;
+  color: white !important;
+}
+
+.p-select-overlay .p-select-option.p-highlight {
+  background: var(--primary, #137fec) !important;
+  color: white !important;
+}
+
+.p-select-overlay .p-select-option.p-focus {
+  background: var(--surface-dark-highlight, #202b36) !important;
+  color: white !important;
+}
+
+/* Select filter input */
+.p-select-overlay .p-select-filter-container {
+  padding: 0.5rem !important;
+  border-bottom: 1px solid var(--border-dark, #283039) !important;
+}
+
+.p-select-overlay .p-select-filter {
+  background: var(--background-dark, #101922) !important;
+  border: 1px solid var(--border-dark, #283039) !important;
+  color: white !important;
+  border-radius: 0.375rem !important;
+  padding: 0.5rem 0.75rem !important;
+}
+
+.p-select-overlay .p-select-filter:focus {
+  border-color: var(--primary, #137fec) !important;
+  box-shadow: 0 0 0 2px rgba(19, 127, 236, 0.2) !important;
+}
+
+.p-select-overlay .p-select-filter::placeholder {
+  color: var(--text-secondary, #9faab6) !important;
+}
+
+/* Empty message */
+.p-select-overlay .p-select-empty-message {
+  color: var(--text-secondary, #9faab6) !important;
+  padding: 0.75rem !important;
+  text-align: center !important;
+}

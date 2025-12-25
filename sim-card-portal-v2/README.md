@@ -1,0 +1,592 @@
+# SIM Card Portal v2
+
+A next-generation portal for managing SIM card services, including activation, deactivation, and tracking, with enhanced user experience and security features. Built with Vue 3, TypeScript, and modern web technologies, featuring JT corporate branding and professional UI design.
+
+## ✨ Features
+
+- 🔐 **Secure Authentication**: Admin portal with JWT token-based session management
+- 📱 **Device Management**: Monitor and manage IoT devices with real-time status
+- 💳 **SIM Card Lifecycle**: Complete SIM card management and usage tracking
+- 📊 **Analytics Dashboard**: Professional statistics and monitoring interface
+- 🎨 **JT Corporate Branding**: Professional design with JT logo and color scheme
+- 📱 **Responsive Design**: Optimized for desktop and mobile devices
+- ⚡ **Modern Tech Stack**: Vue 3, TypeScript, and Vite for optimal performance
+- 🗄️ **Database Integration**: Vercel serverless API with Supabase connectivity
+
+## 🚀 Quick Start
+
+### Local Development
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/tsavenkov/sim-card-portal-v2.git
+   cd sim-card-portal-v2
+   ```
+
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
+
+3. **Start development server**
+   ```bash
+   npm run dev
+   ```
+   The application will be available at `http://localhost:5173`
+
+4. **Login to the portal**
+   - Username: `admin`
+   - Password: `1234567`
+
+5. **Build for production**
+   ```bash
+   npm run build
+   ```
+
+6. **Preview production build**
+   ```bash
+   npm run preview
+   ```
+
+### Full Development Setup (with Real-time MQTT Data)
+
+For full functionality including real-time sensor data synchronization, you need to run multiple services:
+
+#### Prerequisites
+- PostgreSQL database running on port 5434 (Docker)
+- MQTT broker at `192.168.1.199:1883` (EMQX)
+
+#### Required Services
+
+Start these services in separate terminals:
+
+1. **SIM Portal (Frontend)** - Port 5173
+   ```bash
+   npm run dev
+   ```
+
+2. **Local API Server + MQTT Bridge** - Ports 3001 & 3003
+   ```bash
+   npm run api:local
+   ```
+   > The MQTT Bridge (WebSocket server for real-time updates) is automatically started and stopped with the API server.
+
+3. **Data Generator** (Simulated IoT Data)
+   ```bash
+   cd /path/to/MQTTServer/scripts/simportal-generator
+   MQTT_BROKER_URL=mqtt://192.168.1.199:1883 node index.js
+   ```
+
+4. **MQTT Control Panel** (Optional - Device Simulator UI) - Port 5174
+   ```bash
+   cd /path/to/MQTTServer/tools/mqtt-control-panel
+   npm run dev
+   ```
+
+#### Environment Configuration
+
+Update `.env` for local development:
+```env
+VITE_USE_API=true
+VITE_API_URL=http://localhost:3001
+VITE_WEBSOCKET_URL=ws://localhost:3003/ws
+MQTT_BROKER_URL=mqtt://192.168.1.199:1883
+```
+
+#### Data Flow Architecture
+
+```
+┌─────────────────┐     ┌──────────────┐     ┌─────────────────┐
+│  Data Generator │────▶│ MQTT Broker  │◀────│ MQTT Control    │
+│  (Simulated)    │     │ (EMQX)       │     │ Panel           │
+└─────────────────┘     └──────┬───────┘     └─────────────────┘
+                               │
+                               ▼
+                     ┌──────────────────┐
+                     │   MQTT Bridge    │
+                     │  (Port 3003)     │
+                     └────────┬─────────┘
+                              │
+              ┌───────────────┼───────────────┐
+              ▼               ▼               ▼
+      ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
+      │  PostgreSQL  │ │  WebSocket   │ │  Local API   │
+      │  (Port 5434) │ │  Clients     │ │  (Port 3001) │
+      └──────────────┘ └──────────────┘ └──────────────┘
+                              │
+                              ▼
+                     ┌──────────────────┐
+                     │   SIM Portal     │
+                     │  (Port 5173)     │
+                     └──────────────────┘
+```
+
+## 🔌 Testing the Provisioning API
+
+The Provisioning API v1 provides endpoints for SIM lifecycle management, webhook registration, and usage/mediation data ingestion. This API is designed for integration with external provisioning and mediation systems.
+
+### API Overview
+
+| Category | Endpoints |
+|----------|-----------|
+| Health | `GET /api/v1/health` |
+| SIM Provisioning | `POST /api/v1/sims`, `GET /api/v1/sims`, `GET /api/v1/sims/:simId`, `PATCH /api/v1/sims/:simId` |
+| SIM Lifecycle | `POST /api/v1/sims/:simId/activate`, `POST /api/v1/sims/:simId/deactivate`, `POST /api/v1/sims/:simId/block`, `POST /api/v1/sims/:simId/unblock` |
+| Usage | `GET /api/v1/sims/:simId/usage`, `POST /api/v1/usage`, `POST /api/v1/usage/batch`, `POST /api/v1/usage/reset` |
+| Webhooks | `POST /api/v1/webhooks`, `GET /api/v1/webhooks`, `GET /api/v1/webhooks/:webhookId`, `DELETE /api/v1/webhooks/:webhookId` |
+
+### Authentication
+
+All API requests (except `/health`) require authentication via API key:
+
+```bash
+curl -H "X-API-Key: test_provisioning_key_12345" http://localhost:3001/api/v1/sims
+```
+
+**Test API Key**: `test_provisioning_key_12345` (created during database migration)
+
+### Running the Standalone Test Suite
+
+A comprehensive standalone test suite is available in a separate project at `../provisioning-api-test`. This test suite validates all API endpoints with 50+ individual tests.
+
+#### Prerequisites
+
+Before running tests, ensure:
+
+1. **API Server is running:**
+   ```bash
+   # In sim-card-portal-v2 directory
+   npm run api:local
+   ```
+
+2. **Database migration has been applied** (creates test API client)
+
+3. **No Docker container blocking port 3001:**
+   ```bash
+   docker stop simcard-portal-api  # If running
+   ```
+
+#### Running the Tests
+
+```bash
+# Navigate to the test project
+cd /Users/mackmood/CMP/provisioning-api-test
+
+# Run all tests against local API (default)
+node index.js
+
+# Run with npm
+npm test
+```
+
+#### Configuration Options
+
+The test suite can be configured via environment variables:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `API_URL` | `http://localhost:3001/api/v1` | Base URL of the API |
+| `API_KEY` | `test_provisioning_key_12345` | API key for authentication |
+
+```bash
+# Test against local development server
+node index.js
+
+# Test against custom URL
+API_URL=http://localhost:3001/api/v1 node index.js
+
+# Test against staging/production with custom API key
+API_URL=https://api.staging.example.com/v1 API_KEY=staging_key_xxx node index.js
+```
+
+#### Test Categories
+
+The suite covers 8 test categories:
+
+| Category | Tests | Description |
+|----------|-------|-------------|
+| 1. Health Check | 3 | API availability and response format |
+| 2. SIM Provisioning | 17 | Create, get, list, update, duplicate handling |
+| 3. SIM Lifecycle | 11 | Activate, deactivate, block, unblock, state transitions |
+| 4. Webhooks | 11 | Register, list, get, delete webhooks |
+| 5. Usage/Mediation | 11 | Submit records, batch, get usage, reset cycle |
+| 6. Error Handling | 7 | Invalid inputs, 404s, validation errors |
+| 7. Authentication | 4 | Missing auth, invalid key, public endpoints |
+| 8. Rate Limiting | 1 | Configuration verification |
+
+#### Example Output
+
+```
+╔══════════════════════════════════════════════════════════════════╗
+║         PROVISIONING API v1 - STANDALONE TEST SUITE              ║
+╚══════════════════════════════════════════════════════════════════╝
+
+Configuration:
+  Base URL: http://localhost:3001/api/v1
+  API Key:  test_provisioni...
+  Time:     2025-12-15T16:55:04.545Z
+
+1. HEALTH CHECK
+  [PASS] Health endpoint returns 200
+  [PASS] Health status is healthy
+  [PASS] Health has timestamp
+
+2. SIM PROVISIONING
+  [PASS] Create SIM returns 201
+  [PASS] SIM has simId
+  [PASS] SIM status is PROVISIONED
+  [PASS] SIM has ICCID
+    Created SIM: sim_0352786b60bcf562d961b51d
+  [PASS] Get SIM by ID returns 200
+  [PASS] Get SIM returns correct simId
+  [PASS] SIM has HATEOAS links
+  ...
+
+══════════════════════════════════════════════════════════════════
+TEST SUMMARY
+══════════════════════════════════════════════════════════════════
+  Total:    52 tests
+  Passed:   48
+  Failed:   4
+  Rate:     92.3%
+  Duration: 2.45s
+
+Failed Tests:
+  ✗ Block SIM returns 200
+  ✗ SIM status is BLOCKED after block
+  ...
+```
+
+#### Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | All tests passed |
+| `1` | One or more tests failed |
+
+Use in CI/CD pipelines:
+```bash
+node index.js || echo "Tests failed!"
+```
+
+#### Troubleshooting
+
+**Connection Refused:**
+```
+Error: fetch failed - ECONNREFUSED
+```
+- Ensure API server is running: `npm run api:local`
+- Check no other service is using port 3001
+
+**Authentication Failed:**
+```
+[FAIL] Create SIM returns 201 - UNAUTHORIZED
+```
+- Verify test API client exists in database
+- Run the database migration if needed
+
+**Database Errors:**
+```
+[FAIL] Create SIM returns 201 - relation "provisioned_sims" does not exist
+```
+- Run the migration: `PGPASSWORD=simportal123 psql -h localhost -p 5434 -U simportal -d simcardportal -f migrations/010_provisioning_mediation_api.sql`
+
+See the [provisioning-api-test README](../provisioning-api-test/README.md) for complete documentation.
+
+### Using the Dashboard
+
+A visual dashboard is available in the portal:
+
+1. Start the frontend: `npm run dev`
+2. Start the API server: `npm run api:local`
+3. Login to the portal at `http://localhost:5173`
+4. Navigate to **Provisioning API** in the sidebar
+
+Dashboard features:
+- **Stats Overview**: Total, Active, Provisioned, Blocked SIMs count
+- **SIM List**: View all provisioned SIMs with status and actions
+- **Action Buttons**: Activate, Deactivate, Block, Unblock SIMs
+- **Create SIM**: Modal form to provision new SIMs
+- **SIM Details**: View ICCID, IMSI, MSISDN, usage data
+- **Webhook List**: View registered webhooks
+- **Run API Tests**: Built-in test runner button
+
+### Example API Calls
+
+#### Create a SIM
+```bash
+curl -X POST http://localhost:3001/api/v1/sims \
+  -H "X-API-Key: test_provisioning_key_12345" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "iccid": "89012345678901234567",
+    "imsi": "310150000000001",
+    "msisdn": "+15551234567",
+    "customerId": "CUST001",
+    "billingAccountId": "BILL001",
+    "profile": {
+      "apn": "iot.provider.com",
+      "authType": "NONE",
+      "ratePlanId": "PLAN001",
+      "billingAccountId": "BILL001",
+      "customerId": "CUST001"
+    },
+    "plan": {
+      "planId": "PLAN001",
+      "name": "IoT Basic",
+      "dataLimitBytes": 104857600
+    }
+  }'
+```
+
+#### Activate a SIM
+```bash
+curl -X POST http://localhost:3001/api/v1/sims/{simId}/activate \
+  -H "X-API-Key: test_provisioning_key_12345" \
+  -H "Content-Type: application/json" \
+  -d '{"reason": "Customer activation request"}'
+```
+
+#### Get SIM Usage
+```bash
+curl http://localhost:3001/api/v1/sims/{simId}/usage \
+  -H "X-API-Key: test_provisioning_key_12345"
+```
+
+#### Register a Webhook
+```bash
+curl -X POST http://localhost:3001/api/v1/webhooks \
+  -H "X-API-Key: test_provisioning_key_12345" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://your-server.com/webhooks",
+    "events": ["SIM_ACTIVATED", "SIM_DEACTIVATED", "SIM_BLOCKED"],
+    "secret": "your_webhook_secret"
+  }'
+```
+
+### SIM State Machine
+
+```
+┌─────────────┐
+│ PROVISIONED │
+└──────┬──────┘
+       │ activate
+       ▼
+┌─────────────┐◀──────────────┐
+│   ACTIVE    │               │
+└──────┬──────┘               │
+       │ deactivate           │ activate
+       ▼                      │
+┌─────────────┐───────────────┘
+│  INACTIVE   │
+└──────┬──────┘
+       │ block (from ACTIVE or INACTIVE)
+       ▼
+┌─────────────┐
+│   BLOCKED   │──► unblock (returns to previous state)
+└─────────────┘
+```
+
+### Provisioning Data Architecture
+
+The system uses two separate database tables for SIM management, each serving a distinct purpose:
+
+#### Data Flow Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         PROVISIONING DATA FLOW                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+                    ┌──────────────────────────┐
+                    │   External System        │
+                    │   (Provisioning Client)  │
+                    └───────────┬──────────────┘
+                                │
+                                ▼
+                    ┌──────────────────────────┐
+                    │  POST /api/v1/sims       │
+                    │  POST /api/v1/sims/:id/  │
+                    │       activate|block     │
+                    └───────────┬──────────────┘
+                                │
+                                ▼
+┌───────────────────────────────────────────────────────────────────────────┐
+│                      PROVISIONING API v1                                   │
+│                   (api/v1/services/sim.service.ts)                        │
+└───────────────────────────────┬───────────────────────────────────────────┘
+                                │ INSERT/UPDATE
+                                ▼
+┌───────────────────────────────────────────────────────────────────────────┐
+│                     ┌─────────────────────────────┐                       │
+│                     │    provisioned_sims         │                       │
+│                     │    (Telecom/API Data)       │                       │
+│                     ├─────────────────────────────┤                       │
+│                     │ sim_id, iccid, imsi, msisdn │                       │
+│                     │ ki, opc (SENSITIVE KEYS)    │                       │
+│                     │ puk1, puk2, pin1, pin2      │                       │
+│                     │ status: PROVISIONED|ACTIVE  │                       │
+│                     │         |INACTIVE|BLOCKED   │                       │
+│                     └──────────────┬──────────────┘                       │
+│                                    │ TRIGGER                              │
+│                                    │ (sync_provisioned_to_sim_cards)      │
+│                                    ▼                                      │
+│                     ┌─────────────────────────────┐                       │
+│                     │       sim_cards             │                       │
+│                     │    (Portal/UI Data)         │                       │
+│                     ├─────────────────────────────┤                       │
+│                     │ id, iccid, msisdn           │                       │
+│                     │ status: available|Active    │                       │
+│                     │         |Inactive|Suspended │                       │
+│                     │ carrier_id, plan_id         │                       │
+│                     └──────────────┬──────────────┘                       │
+│                                    │                                      │
+│                         SUPABASE DATABASE                                 │
+└───────────────────────────────────┬───────────────────────────────────────┘
+                                    │ SELECT
+                                    ▼
+┌───────────────────────────────────────────────────────────────────────────┐
+│                      MAIN API (local-api-server.js)                        │
+│   GET /api/sim-cards  →  Reads from sim_cards table                       │
+└───────────────────────────────────┬───────────────────────────────────────┘
+                                    │
+                                    ▼
+                    ┌──────────────────────────┐
+                    │   SIM Management Page    │
+                    │   (Frontend Vue.js)      │
+                    └──────────────────────────┘
+```
+
+#### Why Two Tables?
+
+| Reason | Benefit |
+|--------|---------|
+| **Security** | Sensitive keys (ki, opc, PIN codes) isolated from UI |
+| **Separation of Concerns** | Provisioning logic ≠ Management UI logic |
+| **API Stability** | External API contract doesn't break when UI changes |
+| **Different Data Models** | Each domain has appropriate fields |
+
+#### Table Comparison
+
+| Field | `provisioned_sims` | `sim_cards` |
+|-------|-------------------|-------------|
+| Purpose | Telecom provisioning | Portal UI display |
+| ID | sim_id | id |
+| Sensitive Data | ki, opc, PIN/PUK codes | None |
+| Status Values | PROVISIONED, ACTIVE, INACTIVE, BLOCKED | available, Active, Inactive, Suspended |
+| Foreign Keys | billing_account_id, customer_id | carrier_id, plan_id |
+
+#### Status Mapping (Automatic via Trigger)
+
+| Provisioning API | SIM Management Page |
+|-----------------|---------------------|
+| PROVISIONED | available |
+| ACTIVE | Active |
+| INACTIVE | Inactive |
+| BLOCKED | Suspended |
+
+The database trigger `sync_provisioned_to_sim_cards` automatically syncs changes from `provisioned_sims` to `sim_cards`, ensuring the SIM Management page always reflects the current state.
+
+### Database Migration
+
+Before using the API, ensure the database migration has been run:
+
+```bash
+PGPASSWORD=simportal123 psql -h localhost -p 5434 -U simportal -d simcardportal \
+  -f migrations/010_provisioning_mediation_api.sql
+```
+
+This creates:
+- `provisioned_sims` - SIM provisioning data
+- `api_clients` - API authentication (includes test key)
+- `webhooks` / `webhook_deliveries` - Webhook management
+- `usage_records` / `usage_cycles` - Mediation data
+- `sim_audit_log` / `api_audit_log` - Audit logging
+
+## 🌐 Deployment
+
+This project is automatically deployed to Vercel:
+
+- **Production**: Automatic deployment from `main` branch
+- **Preview**: Preview deployments are created for all pull requests
+- **Configuration**: See `vercel.json` for deployment settings
+
+### Manual Deployment to Vercel
+
+1. Install Vercel CLI: `npm i -g vercel`
+2. Run `vercel` in the project root
+3. Follow the prompts to deploy
+
+## 📚 Documentation
+
+- **Project Documentation**: [docs/PROJECT_DOCUMENTATION.md](docs/PROJECT_DOCUMENTATION.md)
+- **Database Integration**: [docs/DATABASE_INTEGRATION.md](docs/DATABASE_INTEGRATION.md)
+
+## 🗄️ Database Setup
+
+This project supports both mock data (for development) and real database connectivity (for production):
+
+### Development Mode (Default)
+Uses mock data stored in TypeScript files - no database setup required.
+
+### Production Mode (Database)
+1. **Set up Supabase project**: Create account at [supabase.com](https://supabase.com)
+2. **Configure environment**: Copy `.env.example` to `.env` and add your credentials
+3. **Run database migrations**: See [DATABASE_INTEGRATION.md](docs/DATABASE_INTEGRATION.md) for SQL schema
+4. **Deploy**: Set `VITE_USE_API=true` in production environment
+
+The application automatically detects the environment and uses the appropriate data source.
+
+## 🛠 Tech Stack
+
+- **Frontend**: Vue 3 with Composition API and TypeScript
+- **Build Tool**: Vite (fast development and optimized builds)
+- **API Layer**: Vercel serverless functions with REST endpoints
+- **Database**: Supabase (PostgreSQL) with real-time capabilities
+- **Authentication**: JWT token-based auth with secure session management
+- **Deployment**: Vercel with automatic deployments
+- **Styling**: CSS3 with JT corporate design system
+- **State Management**: Vue 3 reactivity with service layer abstraction
+
+## 📁 Project Structure
+
+```
+sim-card-portal-v2/
+├── api/                     # Vercel serverless API functions
+│   ├── auth.ts             # Authentication endpoints
+│   ├── devices.ts          # Device management API
+│   └── simcards.ts         # SIM card management API
+├── docs/                    # Project documentation
+│   ├── PROJECT_DOCUMENTATION.md
+│   └── DATABASE_INTEGRATION.md
+├── public/                  # Static assets
+├── src/                     # Source code
+│   ├── assets/             # Assets (images, icons, JT logo)
+│   ├── components/         # Vue components
+│   │   ├── LoginPage.vue   # Authentication interface
+│   │   ├── Navigation.vue  # Main navigation with JT branding
+│   │   ├── Dashboard.vue   # Main dashboard container
+│   │   └── ...             # Other components
+│   ├── data/               # Data layer
+│   │   ├── mockData.ts     # Mock data and interfaces
+│   │   └── dataService.ts  # API service layer
+│   ├── App.vue            # Main application component
+│   ├── main.ts            # Application entry point
+│   └── style.css          # Global styles with JT theme
+├── .env.example           # Environment configuration template
+├── vercel.json            # Vercel deployment configuration
+└── package.json           # Project dependencies and scripts
+```
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature-name`
+3. Make your changes and commit: `git commit -am 'Add feature'`
+4. Push to the branch: `git push origin feature-name`
+5. Submit a pull request
+
+## 📄 License
+
+This project is private and proprietary.

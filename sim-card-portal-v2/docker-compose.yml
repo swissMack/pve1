@@ -1,0 +1,69 @@
+services:
+  # API Server (Node.js)
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    container_name: simcard-portal-api
+    environment:
+      # Using local Supabase PostgreSQL (on Proxmox)
+      # Supabase env vars removed to use PostgreSQL fallback
+      USE_PUBLIC_SCHEMA: "true"
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      DB_HOST: ${DB_HOST:-localhost}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-}
+      DB_NAME: ${DB_NAME:-postgres}
+    ports:
+      - "3001:3001"
+    networks:
+      - simcard-network
+    restart: unless-stopped
+
+  # Frontend (Nginx serving Vue.js)
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.frontend
+    container_name: simcard-portal-frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+    networks:
+      - simcard-network
+    restart: unless-stopped
+
+  # MQTT Bridge Service
+  mqtt-bridge:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.mqtt-bridge
+    container_name: simcard-portal-mqtt-bridge
+    environment:
+      MQTT_BROKER_URL: ${MQTT_BROKER_URL:-mqtt://mqtt-emqx:1883}
+      MQTT_USERNAME: ${MQTT_USERNAME:-}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:-}
+      MQTT_CLIENT_ID: ${MQTT_CLIENT_ID:-simcard-portal-bridge}
+      MQTT_USE_TLS: ${MQTT_USE_TLS:-false}
+      MQTT_TOPIC_PREFIX: ${MQTT_TOPIC_PREFIX:-simportal/devices}
+      WEBSOCKET_PORT: 3002
+      WEBSOCKET_PATH: /ws
+      DB_HOST: ${DB_HOST:-localhost}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-}
+      DB_NAME: ${DB_NAME:-postgres}
+    ports:
+      - "3002:3002"
+    networks:
+      - simcard-network
+      - mqtt-network
+    restart: unless-stopped
+
+networks:
+  simcard-network:
+    driver: bridge
+  mqtt-network:
+    external: true

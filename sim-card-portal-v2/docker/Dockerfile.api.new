@@ -1,0 +1,126 @@
+# API Server Dockerfile
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install production dependencies for API (including Anthropic SDK)
+RUN npm install --ignore-scripts pg express cors @supabase/supabase-js @anthropic-ai/sdk
+
+# Copy API server script
+COPY scripts/local-api-server.js ./scripts/
+
+# Create a modified version that uses environment variables
+RUN cat > ./scripts/api-server.js << 'EOF'
+/**
+ * Docker API server for SIM Card Portal
+ * Reads database connection from environment variables
+ */
+
+import express from 'express'
+import cors from 'cors'
+import pg from 'pg'
+import { createClient } from '@supabase/supabase-js'
+import Anthropic from '@anthropic-ai/sdk'
+
+const { Pool } = pg
+
+// Initialize Anthropic client (reads ANTHROPIC_API_KEY from env)
+let anthropic = null
+if (process.env.ANTHROPIC_API_KEY) {
+  anthropic = new Anthropic()
+  console.log('Anthropic client initialized')
+}
+
+// Supabase client setup
+const supabaseUrl = process.env.SUPABASE_URL
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+let supabase = null
+
+if (supabaseUrl && supabaseServiceKey) {
+  supabase = createClient(supabaseUrl, supabaseServiceKey, {
+    auth: { autoRefreshToken: false, persistSession: false }
+  })
+  console.log('Supabase client initialized for:', supabaseUrl)
+}
+
+function isSupabaseConfigured() {
+  return supabase !== null
+}
+
+const app = express()
+const PORT = process.env.PORT || 3001
+
+// Schema prefix - empty for Supabase (public schema), sim-card-portal-v2. for local dev
+// Set USE_PUBLIC_SCHEMA=true to use public schema (Supabase mode)
+const usePublicSchema = process.env.USE_PUBLIC_SCHEMA === 'true' || isSupabaseConfigured()
+const SCHEMA = usePublicSchema ? '' : 'sim-card-portal-v2.'
+
+// PostgreSQL connection pool using environment variables
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  // Fallback to individual env vars if DATABASE_URL not set
+  user: process.env.DATABASE_URL ? undefined : (process.env.DB_USER || 'simportal'),
+  password: process.env.DATABASE_URL ? undefined : process.env.DB_PASSWORD,
+  host: process.env.DATABASE_URL ? undefined : (process.env.DB_HOST || 'localhost'),
+  port: process.env.DATABASE_URL ? undefined : parseInt(process.env.DB_PORT || '5432'),
+  database: process.env.DATABASE_URL ? undefined : (process.env.DB_NAME || 'simcardportal'),
+  // Connection pool settings
+  max: parseInt(process.env.DB_MAX_CONNECTIONS || '20', 10),
+  idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT || '30000', 10),
+  connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT || '2000', 10),
+})
+
+// ============================================================================
+// USAGE DATA AGGREGATION JOB
+// Syncs usage_records -> daily_usage every 5 minutes
+// ============================================================================
+async function runUsageAggregation() {
+  try {
+    const result = await pool.query(`SELECT ${SCHEMA}aggregate_usage_to_daily() as rows_affected`)
+    const rowsAffected = result.rows[0]?.rows_affected || 0
+    console.log(`[Aggregation] Synced ${rowsAffected} rows from usage_records to daily_usage`)
+    return rowsAffected
+  } catch (error) {
+    console.error('[Aggregation] Error running usage aggregation:', error.message)
+    return 0
+  }
+}
+
+// Run aggregation on startup (after 10 second delay to let DB initialize)
+setTimeout(async () => {
+  console.log('[Aggregation] Running initial sync...')
+  await runUsageAggregation()
+}, 10000)
+
+// Schedule aggregation every 5 minutes (300000ms)
+setInterval(async () => {
+  await runUsageAggregation()
+}, 5 * 60 * 1000)
+
+// Middleware
+app.use(cors())
+app.use(express.json())
+
+// Utility to convert snake_case to camelCase and handle Date objects
+function toCamelCase(obj) {
+  if (Array.isArray(obj)) {
+    return obj.map(v => toCamelCase(v))
+  } else if (obj instanceof Date) {
+    return obj.toISOString()
+  } else if (obj !== null && typeof obj === 'object') {
+    return Object.keys(obj).reduce((result, key) => {
+      const camelKey = key.replace(/_([a-z])/g, g => g[1].toUpperCase())
+      result[camelKey] = toCamelCase(obj[key])
+      return result
+    }, {})
+  }
+  return obj
+}
+EOF
+
+EXPOSE 3001
+
+CMD ["node", "scripts/api-server.js"]

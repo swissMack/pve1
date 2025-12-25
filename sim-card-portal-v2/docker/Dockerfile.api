@@ -1,0 +1,17 @@
+# API Server Dockerfile
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install production dependencies for API (including Anthropic SDK)
+RUN npm install --ignore-scripts pg express cors @supabase/supabase-js @anthropic-ai/sdk
+
+# Copy the pre-built API server script with LLM endpoints
+COPY scripts/api-server-docker.js ./scripts/api-server.js
+
+EXPOSE 3001
+
+CMD ["node", "scripts/api-server.js"]

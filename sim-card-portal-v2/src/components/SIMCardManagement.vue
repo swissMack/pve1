@@ -1,8 +1,14 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { type SIMCard } from '../data/mockData'
 import { dataService } from '../data/dataService'
 import SIMCardDetail from './SIMCardDetail.vue'
+
+interface Props {
+  refreshKey?: number
+}
+
+const props = defineProps<Props>()
 
 const searchTerm = ref('')
 const selectedStatus = ref('All')
@@ -22,7 +28,9 @@ const statusOptions = [
 ]
 
 // Load SIM cards from data service
-onMounted(async () => {
+const loadSIMCards = async () => {
+  loading.value = true
+  error.value = ''
   try {
     simCards.value = await dataService.getSIMCards()
   } catch (err) {
@@ -31,6 +39,15 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
+}
+
+onMounted(() => {
+  loadSIMCards()
+})
+
+// Watch for refresh trigger from parent
+watch(() => props.refreshKey, () => {
+  loadSIMCards()
 })
 
 const filteredSIMCards = computed(() => {

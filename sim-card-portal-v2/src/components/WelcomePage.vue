@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { type Device, type SIMCard } from '../data/mockData'
 import { dataService } from '../data/dataService'
 
 interface WelcomeProps {
   onLogout: () => void
   onNavigate: (page: string) => void
+  refreshKey?: number
 }
 
 const props = defineProps<WelcomeProps>()
@@ -14,7 +15,8 @@ const devices = ref<Device[]>([])
 const simCards = ref<SIMCard[]>([])
 const loading = ref(true)
 
-onMounted(async () => {
+const loadData = async () => {
+  loading.value = true
   try {
     const [deviceData, simData] = await Promise.all([
       dataService.getDevices(),
@@ -27,6 +29,15 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
+}
+
+onMounted(() => {
+  loadData()
+})
+
+// Watch for refresh trigger from parent
+watch(() => props.refreshKey, () => {
+  loadData()
 })
 
 const activeDevices = computed(() => devices.value.filter(d => d.status.toLowerCase() === 'active').length)

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import KPICards from './KPICards.vue'
 import DateRangeSelector from './DateRangeSelector.vue'
 import ConsumptionTrendsChart from './ConsumptionTrendsChart.vue'
@@ -14,6 +14,12 @@ interface DateRange {
   start: string
   end: string
 }
+
+interface Props {
+  refreshKey?: number
+}
+
+const props = defineProps<Props>()
 
 // State - Default to last 6 months for better chart visualization
 const dateRange = ref<DateRange>({
@@ -41,6 +47,11 @@ const openExportModal = () => {
 const closeExportModal = () => {
   showExportModal.value = false
 }
+
+// Watch for refresh trigger from parent
+watch(() => props.refreshKey, () => {
+  refreshKey.value++
+})
 </script>
 
 <template>

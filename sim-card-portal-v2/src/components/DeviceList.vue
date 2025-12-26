@@ -1,9 +1,15 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { type Device } from '../data/mockData'
 import { dataService } from '../data/dataService'
 import DeviceDetail from './DeviceDetail.vue'
 import DeviceMap from './DeviceMap.vue'
+
+interface Props {
+  refreshKey?: number
+}
+
+const props = defineProps<Props>()
 
 const searchTerm = ref('')
 const selectedStatus = ref('All')
@@ -81,13 +87,22 @@ const closeCreateDialog = () => {
 }
 
 const loadDevices = async () => {
+  loading.value = true
+  error.value = ''
   try {
     devices.value = await dataService.getDevices()
   } catch (err) {
     error.value = 'Failed to load devices'
     console.error('Error loading devices:', err)
+  } finally {
+    loading.value = false
   }
 }
+
+// Watch for refresh trigger from parent
+watch(() => props.refreshKey, () => {
+  loadDevices()
+})
 
 // Stats computed
 const activeCount = computed(() => devices.value.filter(d => d.status.toLowerCase() === 'active').length)

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import Navigation from './Navigation.vue'
 import WelcomePage from './WelcomePage.vue'
 import DeviceList from './DeviceList.vue'
@@ -23,7 +23,22 @@ interface DashboardProps {
 }
 
 const props = defineProps<DashboardProps>()
-const currentPage = ref('dashboard')
+
+// Valid pages list
+const validPages = ['dashboard', 'devices', 'sim-cards', 'consumption', 'settings', 'about', 'support']
+
+// Load saved page from localStorage or default to 'dashboard'
+const savedPage = localStorage.getItem('sim-portal-current-page')
+const initialPage = savedPage && validPages.includes(savedPage) ? savedPage : 'dashboard'
+const currentPage = ref(initialPage)
+
+// Persist current page to localStorage when it changes
+watch(currentPage, (newPage) => {
+  localStorage.setItem('sim-portal-current-page', newPage)
+})
+
+// Refresh key - incrementing triggers data refresh in child components
+const refreshKey = ref(0)
 
 // LLM enabled state (controlled by Super Admin)
 const llmEnabled = ref(false)
@@ -57,7 +72,7 @@ const handlePageChange = (page: string) => {
 }
 
 const handleRefresh = () => {
-  window.location.reload()
+  refreshKey.value++
 }
 
 const toggleAskBob = () => {
@@ -117,10 +132,10 @@ const toggleAskBob = () => {
 
       <!-- Scrollable Content -->
       <div class="flex-1 overflow-y-auto">
-        <WelcomePage v-if="currentPage === 'dashboard'" :onLogout="props.onLogout" :onNavigate="handlePageChange" />
-        <DeviceList v-else-if="currentPage === 'devices'" />
-        <SIMCardManagement v-else-if="currentPage === 'sim-cards'" />
-        <ConsumptionPage v-else-if="currentPage === 'consumption'" />
+        <WelcomePage v-if="currentPage === 'dashboard'" :key="'welcome-' + refreshKey" :onLogout="props.onLogout" :onNavigate="handlePageChange" />
+        <DeviceList v-else-if="currentPage === 'devices'" :key="'devices-' + refreshKey" />
+        <SIMCardManagement v-else-if="currentPage === 'sim-cards'" :key="'sim-' + refreshKey" />
+        <ConsumptionPage v-else-if="currentPage === 'consumption'" :key="'consumption-' + refreshKey" />
         <UserSettings v-else-if="currentPage === 'settings'" :currentUser="props.currentUser" />
         <AboutPage v-else-if="currentPage === 'about'" />
         <div v-else-if="currentPage === 'support'" class="p-6 lg:p-8 overflow-y-auto">

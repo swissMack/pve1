@@ -79,8 +79,15 @@ class WebSocketService {
   private onConnectionChangeHandlers: Set<ConnectionHandler> = new Set();
 
   constructor() {
-    // Default URL - can be overridden
-    this.url = import.meta.env.VITE_WEBSOCKET_URL || 'ws://localhost:3002/ws';
+    // Build dynamic WebSocket URL based on current host
+    if (import.meta.env.VITE_WEBSOCKET_URL) {
+      this.url = import.meta.env.VITE_WEBSOCKET_URL;
+    } else {
+      // Use same host as the page, with ws/wss protocol
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const host = window.location.host;
+      this.url = `${protocol}//${host}/ws`;
+    }
   }
 
   /**

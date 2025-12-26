@@ -409,12 +409,12 @@ const parseCSVLine = (line: string): string[] => {
                 dateFormat="dd M yy"
                 showIcon
                 iconDisplay="input"
-                :showOnFocus="false"
+                appendTo="body"
                 :pt="{
                   root: { class: 'w-full' },
                   pcInput: { root: { class: 'w-full !bg-surface-dark !border-border-dark !text-white !rounded-lg !py-2.5 !text-sm focus:!border-primary' } },
                   dropdown: { class: '!bg-surface-dark !border-border-dark !text-white hover:!bg-surface-dark-highlight !rounded-r-lg' },
-                  panel: { class: '!bg-surface-dark !border-border-dark !rounded-xl !shadow-xl' },
+                  panel: { class: '!bg-surface-dark !border-border-dark !rounded-xl !shadow-xl !z-[9999]' },
                   header: { class: '!bg-surface-dark !border-border-dark' },
                   title: { class: '!text-white' },
                   selectMonth: { class: '!text-white hover:!bg-primary/20' },
@@ -435,12 +435,12 @@ const parseCSVLine = (line: string): string[] => {
                 dateFormat="dd M yy"
                 showIcon
                 iconDisplay="input"
-                :showOnFocus="false"
+                appendTo="body"
                 :pt="{
                   root: { class: 'w-full' },
                   pcInput: { root: { class: 'w-full !bg-surface-dark !border-border-dark !text-white !rounded-lg !py-2.5 !text-sm focus:!border-primary' } },
                   dropdown: { class: '!bg-surface-dark !border-border-dark !text-white hover:!bg-surface-dark-highlight !rounded-r-lg' },
-                  panel: { class: '!bg-surface-dark !border-border-dark !rounded-xl !shadow-xl' },
+                  panel: { class: '!bg-surface-dark !border-border-dark !rounded-xl !shadow-xl !z-[9999]' },
                   header: { class: '!bg-surface-dark !border-border-dark' },
                   title: { class: '!text-white' },
                   selectMonth: { class: '!text-white hover:!bg-primary/20' },

@@ -12,6 +12,7 @@ import Tag from 'primevue/tag'
 import ProgressBar from 'primevue/progressbar'
 import Panel from 'primevue/panel'
 import Message from 'primevue/message'
+import DatePicker from 'primevue/datepicker'
 
 // Props
 const props = defineProps<{
@@ -152,6 +153,25 @@ const formatDate = (dateString?: string) => {
     return dateString
   }
 }
+
+// Computed properties for date pickers (convert string to Date and back)
+const activationDateModel = computed({
+  get: () => editedSIMCard.value?.activationDate ? new Date(editedSIMCard.value.activationDate) : null,
+  set: (val: Date | null) => {
+    if (editedSIMCard.value && val) {
+      editedSIMCard.value.activationDate = val.toISOString().split('T')[0]
+    }
+  }
+})
+
+const expiryDateModel = computed({
+  get: () => editedSIMCard.value?.expiryDate ? new Date(editedSIMCard.value.expiryDate) : null,
+  set: (val: Date | null) => {
+    if (editedSIMCard.value && val) {
+      editedSIMCard.value.expiryDate = val.toISOString().split('T')[0]
+    }
+  }
+})
 </script>
 
 <template>
@@ -328,22 +348,28 @@ const formatDate = (dateString?: string) => {
         <div class="form-grid">
           <div class="form-group">
             <label class="form-label">Activation Date</label>
-            <InputText
+            <DatePicker
               v-if="isEditing"
-              v-model="editedSIMCard.activationDate"
-              type="date"
+              v-model="activationDateModel"
+              dateFormat="dd M yy"
+              showIcon
+              iconDisplay="input"
               class="form-input"
+              placeholder="Select activation date"
             />
             <span v-else class="form-value">{{ formatDate(simCard.activationDate) }}</span>
           </div>
 
           <div class="form-group">
             <label class="form-label">Expiry Date</label>
-            <InputText
+            <DatePicker
               v-if="isEditing"
-              v-model="editedSIMCard.expiryDate"
-              type="date"
+              v-model="expiryDateModel"
+              dateFormat="dd M yy"
+              showIcon
+              iconDisplay="input"
               class="form-input"
+              placeholder="Select expiry date"
             />
             <span v-else class="form-value">{{ formatDate(simCard.expiryDate) }}</span>
           </div>
@@ -696,5 +722,105 @@ const formatDate = (dateString?: string) => {
 /* Message styling */
 .sim-detail-dialog .p-message {
   border-radius: 0.5rem !important;
+}
+
+/* DatePicker styling for dark theme */
+.sim-detail-dialog .p-datepicker {
+  width: 100%;
+}
+
+.sim-detail-dialog .p-datepicker .p-inputtext {
+  background: var(--background-dark, #101922) !important;
+  border: 1px solid var(--border-dark, #283039) !important;
+  color: white !important;
+  border-radius: 0.5rem !important;
+}
+
+.sim-detail-dialog .p-datepicker .p-inputtext:enabled:hover {
+  border-color: var(--primary, #137fec) !important;
+}
+
+.sim-detail-dialog .p-datepicker .p-inputtext:enabled:focus {
+  border-color: var(--primary, #137fec) !important;
+  box-shadow: 0 0 0 2px rgba(19, 127, 236, 0.2) !important;
+}
+
+.sim-detail-dialog .p-datepicker-dropdown {
+  background: var(--background-dark, #101922) !important;
+  border: 1px solid var(--border-dark, #283039) !important;
+  border-left: none !important;
+  color: white !important;
+}
+
+.sim-detail-dialog .p-datepicker-dropdown:hover {
+  background: var(--surface-dark-highlight, #202b36) !important;
+}
+
+/* DatePicker panel/calendar styling */
+.p-datepicker-panel {
+  background: var(--surface-dark, #18222c) !important;
+  border: 1px solid var(--border-dark, #283039) !important;
+  border-radius: 0.75rem !important;
+}
+
+.p-datepicker-header {
+  background: var(--surface-dark, #18222c) !important;
+  border-bottom: 1px solid var(--border-dark, #283039) !important;
+  color: white !important;
+}
+
+.p-datepicker-title button {
+  color: white !important;
+}
+
+.p-datepicker-title button:hover {
+  background: var(--surface-dark-highlight, #202b36) !important;
+}
+
+.p-datepicker-prev-button,
+.p-datepicker-next-button {
+  color: white !important;
+}
+
+.p-datepicker-prev-button:hover,
+.p-datepicker-next-button:hover {
+  background: var(--surface-dark-highlight, #202b36) !important;
+}
+
+.p-datepicker table th {
+  color: var(--text-secondary, #9faab6) !important;
+}
+
+.p-datepicker table td > span {
+  color: white !important;
+}
+
+.p-datepicker table td > span:hover {
+  background: rgba(19, 127, 236, 0.2) !important;
+}
+
+.p-datepicker table td.p-datepicker-today > span {
+  background: rgba(19, 127, 236, 0.3) !important;
+}
+
+.p-datepicker table td > span.p-highlight {
+  background: var(--primary, #137fec) !important;
+  color: white !important;
+}
+
+.p-monthpicker .p-monthpicker-month,
+.p-yearpicker .p-yearpicker-year {
+  color: white !important;
+}
+
+.p-monthpicker .p-monthpicker-month:hover,
+.p-yearpicker .p-yearpicker-year:hover {
+  background: rgba(19, 127, 236, 0.2) !important;
+}
+
+.p-monthpicker .p-highlight,
+.p-yearpicker .p-highlight {
+  background: var(--primary, #137fec) !important;
+  color: white !important;
 }
 </style>

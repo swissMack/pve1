@@ -278,7 +278,7 @@ app.put('/api/simcards', async (req, res) => {
       if (updates[camelKey] !== undefined) {
         paramCount++
         updateFields.push(`${snakeKey} = $${paramCount}`)
-        values.push(updates[camelKey])
+        if (camelKey === 'status' && typeof updates[camelKey] === 'string') { values.push(updates[camelKey].toUpperCase()) } else { values.push(updates[camelKey]) }
       }
     }
 

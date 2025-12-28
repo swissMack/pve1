@@ -5,7 +5,14 @@
 
 import axios from 'axios'
 
-const PORTAL_API_BASE = 'http://192.168.1.59:3001'
+// Dynamic API URL based on current host
+const getPortalApiBase = () => {
+  const hostname = window.location.hostname
+  // Use port 3001 for API on the same host
+  return `http://${hostname}:3001`
+}
+
+const PORTAL_API_BASE = getPortalApiBase()
 const API_KEY = 'test_provisioning_key_12345'
 
 export const simPortalApi = axios.create({
@@ -50,24 +57,19 @@ function transformSim(sim) {
 
 // Generate unique IDs
 function generateIccid() {
-  // ICCID must be exactly 19 digits
-  // 89 (industry) + 41 (country) + 28 (issuer) + 10 random = 19 total
-  const base = '894128' // 6 digits
-  const mid = String(Date.now() % 10000000).padStart(7, '0') // 7 digits
-  const end = String(Math.floor(Math.random() * 1000000)).padStart(6, '0') // 6 digits
-  return base + mid + end // 6 + 7 + 6 = 19 digits exactly
+  const base = '894128'
+  const mid = String(Date.now() % 10000000).padStart(7, '0')
+  const end = String(Math.floor(Math.random() * 1000000)).padStart(6, '0')
+  return base + mid + end
 }
 
 function generateImsi() {
-  // IMSI must be exactly 15 digits
-  // Format: 228 (MCC Switzerland) + 01 (MNC Swisscom) + 10 digit MSIN = 15 digits
-  const base = '22801' // 5 digits
-  const msin = String(Date.now() % 10000000000).padStart(10, '0') // 10 digits
-  return base + msin // 5 + 10 = 15 digits exactly
+  const base = '22801'
+  const msin = String(Date.now() % 10000000000).padStart(10, '0')
+  return base + msin
 }
 
 function generateMsisdn() {
-  // Swiss format: +41 7x xxx xx xx
   const prefix = Math.random() > 0.5 ? '79' : '78'
   return '+41' + prefix + Math.floor(Math.random() * 9000000 + 1000000)
 }
@@ -81,36 +83,30 @@ function generateBatchId() {
 }
 
 export const simPortalService = {
-  // Health check
   async healthCheck() {
     const response = await simPortalApi.get('/api/v1/health')
     return response.data
   },
 
-  // List SIMs from the portal (uses Docker API endpoint)
   async listSims(params = {}) {
     const response = await simPortalApi.get('/api/simcards', { params })
-    // Docker API returns {success: true, data: [...]}
     const sims = response.data.data || response.data || []
     return {
       data: Array.isArray(sims) ? sims.map(transformSim) : []
     }
   },
 
-  // Get single SIM details
   async getSim(simId) {
     const response = await simPortalApi.get(`/api/simcards/${simId}`)
     const sim = response.data.data || response.data
     return { data: transformSim(sim) }
   },
 
-  // Create a new SIM card (simulates creation since Docker API is read-only)
   async createSim(customData = {}) {
     const iccid = customData.iccid || generateIccid()
     const msisdn = customData.msisdn || generateMsisdn()
     const simId = 'SIM-' + Date.now()
 
-    // Docker API doesn't support creating SIMs, return simulated response
     console.log('[simPortalService] SIM creation simulated (Docker API is read-only)')
 
     return {
@@ -123,7 +119,6 @@ export const simPortalService = {
     }
   },
 
-  // Activate a SIM (simulates activation)
   async activateSim(simId, notes = '') {
     console.log('[simPortalService] SIM activation simulated for:', simId)
     return {
@@ -134,7 +129,6 @@ export const simPortalService = {
     }
   },
 
-  // Deactivate a SIM (simulates deactivation)
   async deactivateSim(simId, notes = '') {
     console.log('[simPortalService] SIM deactivation simulated for:', simId)
     return {
@@ -145,7 +139,6 @@ export const simPortalService = {
     }
   },
 
-  // Block a SIM (simulates blocking)
   async blockSim(simId, reason = 'MANUAL', notes = '') {
     console.log('[simPortalService] SIM block simulated for:', simId)
     return {
@@ -157,7 +150,6 @@ export const simPortalService = {
     }
   },
 
-  // Unblock a SIM (simulates unblocking)
   async unblockSim(simId, notes = '') {
     console.log('[simPortalService] SIM unblock simulated for:', simId)
     return {
@@ -168,12 +160,10 @@ export const simPortalService = {
     }
   },
 
-  // Submit usage record for a SIM (uses Docker API /api/v1/usage)
   async submitUsage(iccid, usageData = {}) {
     const now = new Date()
-    const periodStart = new Date(now.getTime() - 5 * 60 * 1000) // 5 minutes ago
+    const periodStart = new Date(now.getTime() - 5 * 60 * 1000)
 
-    // Calculate totalBytes from upload + download if not provided
     const totalBytes = usageData.totalBytes ||
       ((usageData.dataUploadBytes || 0) + (usageData.dataDownloadBytes || 0)) ||
       Math.floor(Math.random() * 25000000)
@@ -197,7 +187,6 @@ export const simPortalService = {
     return response.data
   },
 
-  // Submit batch usage records
   async submitUsageBatch(records) {
     const payload = {
       batchId: generateBatchId(),
@@ -212,16 +201,14 @@ export const simPortalService = {
     return response.data
   },
 
-  // Get usage for a SIM
   async getUsage(simId) {
     const response = await simPortalApi.get(`/api/v1/sims/${simId}/usage`)
     return response.data
   },
 
-  // Helper to generate random usage data
   generateRandomUsage() {
-    const upload = Math.floor(Math.random() * 5000000) // 0-5MB
-    const download = Math.floor(Math.random() * 20000000) // 0-20MB
+    const upload = Math.floor(Math.random() * 5000000)
+    const download = Math.floor(Math.random() * 20000000)
     return {
       dataUploadBytes: upload,
       dataDownloadBytes: download,

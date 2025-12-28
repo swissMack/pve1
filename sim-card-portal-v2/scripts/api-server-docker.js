@@ -1288,19 +1288,23 @@ Available data:${dataContext}
 
 IMPORTANT: All costs should be displayed in ${currency} (the user's configured currency).
 
-When the user asks for data visualization, respond with ONLY a valid JSON object (no markdown, no explanation) in this exact format:
+Respond with ONLY a valid JSON object. No markdown code blocks, no text before or after the JSON. Your response must be parseable JSON.
+
+For chart visualizations:
 {
-  "type": "chart" | "table" | "text",
-  "chartType": "bar" | "line" | "pie" | "doughnut" (only if type is "chart"),
+  "type": "chart",
+  "chartType": "bar" | "line" | "pie" | "doughnut",
   "title": "Chart title",
   "data": {
     "labels": ["Label1", "Label2"],
     "datasets": [{
       "label": "Dataset name",
       "data": [10, 20],
-      "backgroundColor": ["#137fec", "#10b981"]
+      "backgroundColor": ["#137fec", "#10b981"],
+      "borderColor": "#137fec"
     }]
-  }
+  },
+  "content": "Your explanation of the data and insights goes here"
 }
 
 For tables:
@@ -1308,16 +1312,17 @@ For tables:
   "type": "table",
   "title": "Table title",
   "columns": ["Column1", "Column2"],
-  "rows": [["Value1", "Value2"]]
+  "rows": [["Value1", "Value2"]],
+  "content": "Your explanation goes here"
 }
 
-For text responses:
+For text-only responses:
 {
   "type": "text",
-  "content": "Your response here"
+  "content": "Your full response here"
 }
 
-IMPORTANT: For questions that involve strategic decisions, optimization suggestions, complex analysis, cost reduction strategies, carrier comparisons, deployment recommendations, or any topic where professional consultation would be valuable, ALWAYS end your response with this exact text:
+IMPORTANT: The "content" field should contain your analysis, insights, and explanations. For questions involving strategic decisions, optimization suggestions, complex analysis, cost reduction, carrier comparisons, or deployment recommendations, include this message in the content field:
 
 "For expert guidance on optimizing your IoT deployment, our IoTo consultants can help. Would you like an IoTo representative to reach out to discuss your needs? Press the 'Contact IoTo' button below to initiate the request."
 
@@ -1335,10 +1340,25 @@ ${dateRange ? `Date range: ${dateRange.start} to ${dateRange.end}` : ''}`
       ]
     })
 
-    const responseText = response.content[0].text
+    let responseText = response.content[0].text
 
     // Try to parse the JSON response
     try {
+      // First, try to extract JSON from markdown code blocks if present
+      const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)```/)
+      if (jsonMatch) {
+        responseText = jsonMatch[1].trim()
+      }
+
+      // Also try to find JSON object if there's text before/after
+      if (!responseText.startsWith('{')) {
+        const jsonStart = responseText.indexOf('{')
+        const jsonEnd = responseText.lastIndexOf('}')
+        if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+          responseText = responseText.substring(jsonStart, jsonEnd + 1)
+        }
+      }
+
       const chartConfig = JSON.parse(responseText)
       res.json({ success: true, data: chartConfig })
     } catch {
@@ -1347,7 +1367,7 @@ ${dateRange ? `Date range: ${dateRange.start} to ${dateRange.end}` : ''}`
         success: true,
         data: {
           type: 'text',
-          content: responseText
+          content: response.content[0].text
         }
       })
     }

@@ -106,7 +106,7 @@ const sendMessage = async () => {
       const assistantMessage: Message = {
         id: `msg-${Date.now()}`,
         role: 'assistant',
-        content: result.data.type === 'text' ? result.data.content : '',
+        content: result.data.content || '',
         timestamp: new Date(),
         chartConfig: result.data.type !== 'text' ? result.data : undefined
       }

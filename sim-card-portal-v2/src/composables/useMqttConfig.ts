@@ -2,7 +2,18 @@ import { ref, onUnmounted } from 'vue'
 import mqtt from 'mqtt'
 import type { MqttClient } from 'mqtt'
 
-const BROKER_URL = 'ws://localhost:8083/mqtt'
+// Dynamic MQTT WebSocket URL - uses env var or builds from current host
+const getMqttBrokerUrl = (): string => {
+  if (import.meta.env.VITE_MQTT_BROKER_URL) {
+    return import.meta.env.VITE_MQTT_BROKER_URL
+  }
+  // Default to WebSocket on same host, port 8083 (EMQX WebSocket port)
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  const host = window.location.hostname
+  return `${protocol}//${host}:8083/mqtt`
+}
+
+const BROKER_URL = getMqttBrokerUrl()
 
 // Shared state across all component instances
 const client = ref<MqttClient | null>(null)

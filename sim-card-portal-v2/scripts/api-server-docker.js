@@ -1074,11 +1074,12 @@ app.get('/api/consumption/carrier-locations', async (req, res) => {
     // Get devices with their SIM cards and carrier info
     const result = await pool.query(
       'SELECT d.id, d.name, d.latitude, d.longitude, ' +
-      's.carrier, s.iccid, s.status as sim_status ' +
+      'c.name as carrier, s.iccid, s.status as sim_status ' +
       'FROM ' + SCHEMA + 'devices d ' +
       'LEFT JOIN ' + SCHEMA + 'sim_cards s ON d.sim_card_id = s.id ' +
+      'LEFT JOIN ' + SCHEMA + 'carriers c ON s.carrier_id = c.id ' +
       'WHERE d.latitude IS NOT NULL AND d.longitude IS NOT NULL ' +
-      'AND s.carrier IS NOT NULL'
+      'AND s.carrier_id IS NOT NULL'
     )
 
     const locations = result.rows.map(row => ({

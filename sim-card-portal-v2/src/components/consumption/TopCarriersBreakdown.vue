@@ -3,6 +3,7 @@ import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { Chart, registerables } from 'chart.js'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import type { TimeGranularity, FilterCriteria } from '@/types/analytics'
 
 Chart.register(...registerables)
 
@@ -32,8 +33,17 @@ interface CarrierLocation {
   simStatus: string
 }
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   dateRange: DateRange
+  granularity?: TimeGranularity
+  filters?: Partial<FilterCriteria>
+}>(), {
+  granularity: 'monthly',
+  filters: undefined
+})
+
+const emit = defineEmits<{
+  loading: [isLoading: boolean]
 }>()
 
 const chartCanvas = ref<HTMLCanvasElement | null>(null)
@@ -69,10 +79,18 @@ const fetchCarriers = async () => {
       end_date: props.dateRange.end
     })
 
+    // Add filter parameters if provided
+    if (props.filters?.networks?.length) {
+      props.filters.networks.forEach((mccmnc: string) => params.append('mccmnc', mccmnc))
+    }
+    if (props.filters?.imsis?.length) {
+      props.filters.imsis.forEach((imsi: string) => params.append('imsi', imsi))
+    }
+
     // Fetch carriers and locations in parallel
     const [carriersResponse, locationsResponse] = await Promise.all([
       fetch(`/api/consumption/carriers?${params}`),
-      fetch('/api/consumption/carrier-locations')
+      fetch(`/api/consumption/carrier-locations?${params}`)
     ])
 
     const carriersResult = await carriersResponse.json()
@@ -240,8 +258,17 @@ const renderChart = () => {
   })
 }
 
+// Emit loading state changes to parent
+watch(loading, (isLoading) => {
+  emit('loading', isLoading)
+})
+
 onMounted(fetchCarriers)
 watch(() => props.dateRange, fetchCarriers, { deep: true })
+// Watch for granularity changes from parent
+watch(() => props.granularity, fetchCarriers)
+// Watch for filter changes
+watch(() => props.filters, fetchCarriers, { deep: true })
 
 onUnmounted(() => {
   if (mapInstance.value) {

@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import type { TimeGranularity, FilterCriteria } from '@/types/analytics'
 
 interface RegionalData {
   id: string
@@ -12,18 +13,46 @@ interface RegionalData {
   locationName?: string
 }
 
+const props = withDefaults(defineProps<{
+  granularity?: TimeGranularity
+  filters?: Partial<FilterCriteria>
+}>(), {
+  granularity: 'monthly',
+  filters: undefined
+})
+
+const emit = defineEmits<{
+  loading: [isLoading: boolean]
+}>()
+
 const mapContainer = ref<HTMLDivElement | null>(null)
 const mapInstance = ref<L.Map | null>(null)
 const regionalData = ref<RegionalData[]>([])
 const loading = ref(true)
 const error = ref<string | null>(null)
 
+// Emit loading state changes to parent
+watch(loading, (isLoading) => {
+  emit('loading', isLoading)
+})
+
 const fetchRegionalData = async () => {
   loading.value = true
   error.value = null
 
   try {
-    const response = await fetch('/api/consumption/regional')
+    const params = new URLSearchParams()
+
+    // Add filter parameters if provided
+    if (props.filters?.networks?.length) {
+      props.filters.networks.forEach((mccmnc: string) => params.append('mccmnc', mccmnc))
+    }
+    if (props.filters?.imsis?.length) {
+      props.filters.imsis.forEach((imsi: string) => params.append('imsi', imsi))
+    }
+
+    const queryString = params.toString()
+    const response = await fetch(`/api/consumption/regional${queryString ? `?${queryString}` : ''}`)
     const result = await response.json()
 
     if (result.success) {
@@ -118,6 +147,26 @@ const addMarkers = () => {
 }
 
 onMounted(fetchRegionalData)
+
+// Watch for granularity changes from parent
+watch(() => props.granularity, () => {
+  // Destroy existing map before refetching
+  if (mapInstance.value) {
+    mapInstance.value.remove()
+    mapInstance.value = null
+  }
+  fetchRegionalData()
+})
+
+// Watch for filter changes
+watch(() => props.filters, () => {
+  // Destroy existing map before refetching
+  if (mapInstance.value) {
+    mapInstance.value.remove()
+    mapInstance.value = null
+  }
+  fetchRegionalData()
+}, { deep: true })
 
 onUnmounted(() => {
   if (mapInstance.value) {

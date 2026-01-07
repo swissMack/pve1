@@ -1,0 +1,468 @@
+openapi: 3.1.0
+info:
+  title: SIM Card Portal - Analytics Proxy API
+  description: |
+    Proxy endpoints for the external Analytics Service API.
+    These endpoints forward requests to the Analytics API (localhost:9010) with
+    OAuth2 authentication handled by the portal backend.
+  version: 1.0.0
+  contact:
+    name: Portal API
+
+servers:
+  - url: /api
+    description: Portal API base path
+
+security:
+  - sessionAuth: []
+
+tags:
+  - name: Analytics
+    description: Analytics data queries proxied to external Analytics Service
+
+paths:
+  /analytics/tenant-network:
+    get:
+      tags:
+        - Analytics
+      operationId: getTenantNetworkUsage
+      summary: Usage per network for tenant
+      description: |
+        Returns deduplicated byte usage per MCCMNC network for the authenticated tenant.
+        Proxies to: GET /analytics/tenant/network on Analytics Service.
+      parameters:
+        - name: period
+          in: query
+          required: true
+          description: Period format - yyyy (year), yyyy-MM (month), or yyyy-MM-dd (day)
+          schema:
+            type: string
+            examples:
+              - "2025"
+              - "2025-01"
+              - "2025-01-07"
+        - name: periodEnd
+          in: query
+          required: false
+          description: Optional end period (inclusive range)
+          schema:
+            type: string
+        - name: mccmnc
+          in: query
+          required: false
+          description: Network codes filter (comma-separated or repeated)
+          schema:
+            type: array
+            items:
+              type: string
+          style: form
+          explode: true
+      responses:
+        '200':
+          description: Usage data retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsageResponse'
+        '400':
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Analytics service unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /analytics/customer-network:
+    get:
+      tags:
+        - Analytics
+      operationId: getCustomerNetworkUsage
+      summary: Usage per network for customer
+      description: |
+        Returns deduplicated byte usage per MCCMNC network for a specific customer.
+        Proxies to: GET /analytics/customer/network on Analytics Service.
+      parameters:
+        - name: customer
+          in: query
+          required: true
+          description: Customer identifier
+          schema:
+            type: string
+        - name: period
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: periodEnd
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: mccmnc
+          in: query
+          required: false
+          schema:
+            type: array
+            items:
+              type: string
+          style: form
+          explode: true
+      responses:
+        '200':
+          description: Usage data retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /analytics/imsi:
+    get:
+      tags:
+        - Analytics
+      operationId: getImsiUsage
+      summary: Usage per IMSI
+      description: |
+        Returns deduplicated byte usage per IMSI for the requested period.
+        Proxies to: GET /analytics/imsi on Analytics Service.
+      parameters:
+        - name: customer
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: imsi
+          in: query
+          required: true
+          description: IMSI values (comma-separated or repeated)
+          schema:
+            type: array
+            items:
+              type: string
+          style: form
+          explode: true
+        - name: period
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: periodEnd
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: IMSI usage data retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /analytics/imsi-network:
+    get:
+      tags:
+        - Analytics
+      operationId: getImsiNetworkUsage
+      summary: Usage per IMSI per network
+      description: |
+        Returns deduplicated byte usage per IMSI and MCCMNC network.
+        Proxies to: GET /analytics/imsi/network on Analytics Service.
+      parameters:
+        - name: customer
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: imsi
+          in: query
+          required: true
+          schema:
+            type: array
+            items:
+              type: string
+          style: form
+          explode: true
+        - name: mccmnc
+          in: query
+          required: false
+          schema:
+            type: array
+            items:
+              type: string
+          style: form
+          explode: true
+        - name: period
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: periodEnd
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: IMSI network usage data retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /analytics/unique-imsi-count:
+    get:
+      tags:
+        - Analytics
+      operationId: getUniqueImsiCount
+      summary: Unique IMSI count per network
+      description: |
+        Returns count of unique IMSIs per MCCMNC network for the requested period.
+        Proxies to: GET /analytics/unique/imsi/count/tenant/network on Analytics Service.
+      parameters:
+        - name: period
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: periodEnd
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: mccmnc
+          in: query
+          required: false
+          schema:
+            type: array
+            items:
+              type: string
+          style: form
+          explode: true
+      responses:
+        '200':
+          description: Unique IMSI counts retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UniqueImsiResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /mccmnc/lookup:
+    get:
+      tags:
+        - Analytics
+      operationId: getMccmncMapping
+      summary: Lookup MCCMNC to carrier name mapping
+      description: |
+        Returns carrier names for given MCCMNC codes.
+        Uses external MCC-MNC reference API with 24-hour caching.
+      parameters:
+        - name: codes
+          in: query
+          required: true
+          description: MCCMNC codes to lookup (comma-separated)
+          schema:
+            type: array
+            items:
+              type: string
+          style: form
+          explode: true
+      responses:
+        '200':
+          description: Carrier mappings retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MccmncMappingResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+components:
+  securitySchemes:
+    sessionAuth:
+      type: apiKey
+      in: cookie
+      name: session
+      description: Session cookie from portal authentication
+
+  schemas:
+    Usage:
+      type: object
+      properties:
+        year:
+          type: string
+          description: Year bucket (yyyy)
+          example: "2025"
+        month:
+          type: string
+          description: Month bucket (yyyy-MM)
+          example: "2025-01"
+        day:
+          type: string
+          description: Day bucket (yyyy-MM-dd)
+          example: "2025-01-07"
+        mccmnc:
+          type: string
+          description: Mobile Network Code
+          example: "22288"
+        imsi:
+          type: string
+          description: International Mobile Subscriber Identity
+          example: "234507093108712"
+        bytes:
+          type: integer
+          format: int64
+          description: Total bytes (deduplicated) for the bucket
+          example: 123456789
+        latestEventAt:
+          type: string
+          format: date-time
+          description: Timestamp of latest contributing event (UTC)
+          example: "2025-01-07T16:00:00Z"
+
+    UniqueImsi:
+      type: object
+      properties:
+        year:
+          type: string
+        month:
+          type: string
+        day:
+          type: string
+        mccmnc:
+          type: string
+          example: "22288"
+        uniqueImsiCount:
+          type: integer
+          format: int64
+          description: Count of unique IMSIs
+          example: 421
+        latestEventAt:
+          type: string
+          format: date-time
+
+    NetworkMapping:
+      type: object
+      properties:
+        mccmnc:
+          type: string
+          example: "22288"
+        carrierName:
+          type: string
+          example: "TIM Italy"
+        countryCode:
+          type: string
+          example: "IT"
+        networkType:
+          type: string
+          example: "GSM"
+
+    UsageResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Usage'
+        cached:
+          type: boolean
+          description: Whether response came from session cache
+          example: false
+        error:
+          type: string
+
+    UniqueImsiResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/UniqueImsi'
+        cached:
+          type: boolean
+        error:
+          type: string
+
+    MccmncMappingResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/NetworkMapping'
+        error:
+          type: string
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: string
+          example: "Invalid period format"
+        message:
+          type: string
+          example: "Period must be in format yyyy, yyyy-MM, or yyyy-MM-dd"
+
+  responses:
+    BadRequest:
+      description: Invalid request parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Not authenticated
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ServiceUnavailable:
+      description: Analytics service unavailable
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'

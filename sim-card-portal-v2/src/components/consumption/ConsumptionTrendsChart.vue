@@ -2,6 +2,7 @@
 import { ref, onMounted, onBeforeUnmount, watch, nextTick, computed } from 'vue'
 import { Chart, registerables } from 'chart.js'
 import { useAppSettings } from '../../composables/useAppSettings'
+import type { TimeGranularity, FilterCriteria } from '@/types/analytics'
 
 Chart.register(...registerables)
 
@@ -19,8 +20,17 @@ interface TrendData {
   simCount: number
 }
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   dateRange: DateRange
+  granularity?: TimeGranularity
+  filters?: Partial<FilterCriteria>
+}>(), {
+  granularity: undefined,
+  filters: undefined
+})
+
+const emit = defineEmits<{
+  loading: [isLoading: boolean]
 }>()
 
 const chartCanvas = ref<HTMLCanvasElement | null>(null)
@@ -28,9 +38,33 @@ const chartInstance = ref<Chart | null>(null)
 const trends = ref<TrendData[]>([])
 const loading = ref(true)
 const error = ref<string | null>(null)
-const viewMode = ref<'hourly' | 'daily' | 'weekly' | 'monthly'>('monthly')
+// Internal view mode (used when granularity prop not provided)
+const internalViewMode = ref<'hourly' | 'daily' | 'weekly' | 'monthly'>('monthly')
 // Track when chart is transitioning to disable buttons
 const isTransitioning = ref(false)
+
+// Use external granularity if provided, otherwise use internal state
+const viewMode = computed(() => {
+  if (props.granularity) {
+    // Map TimeGranularity to internal format
+    const mapping: Record<TimeGranularity, 'hourly' | 'daily' | 'weekly' | 'monthly'> = {
+      '24h': 'hourly',
+      'daily': 'daily',
+      'weekly': 'weekly',
+      'monthly': 'monthly'
+    }
+    return mapping[props.granularity]
+  }
+  return internalViewMode.value
+})
+
+// Determine if external control is active (hide internal toggle)
+const hasExternalGranularity = computed(() => props.granularity !== undefined)
+
+// Emit loading state changes to parent
+watch(loading, (isLoading) => {
+  emit('loading', isLoading)
+})
 
 // Track pending animation frame to cancel on rapid clicks
 let pendingAnimationFrame: number | null = null
@@ -62,6 +96,14 @@ const fetchTrends = async (isInitial = false) => {
     const params = new URLSearchParams({
       granularity: viewMode.value
     })
+
+    // Add filter parameters if provided
+    if (props.filters?.networks?.length) {
+      props.filters.networks.forEach((mccmnc: string) => params.append('mccmnc', mccmnc))
+    }
+    if (props.filters?.imsis?.length) {
+      props.filters.imsis.forEach((imsi: string) => params.append('imsi', imsi))
+    }
 
     const response = await fetch(`/api/consumption/trends?${params}`)
     const result = await response.json()
@@ -316,7 +358,22 @@ onBeforeUnmount(() => {
 
 onMounted(() => fetchTrends(true))
 watch(() => props.dateRange, () => fetchTrends(true), { deep: true })
-watch(viewMode, () => fetchTrends(false))
+// Watch for external granularity changes
+watch(() => props.granularity, () => {
+  if (props.granularity) {
+    fetchTrends(false)
+  }
+})
+// Watch internal view mode changes (when not externally controlled)
+watch(internalViewMode, () => {
+  if (!props.granularity) {
+    fetchTrends(false)
+  }
+})
+// Watch for filter changes
+watch(() => props.filters, () => {
+  fetchTrends(false)
+}, { deep: true })
 </script>
 
 <template>
@@ -331,16 +388,16 @@ watch(viewMode, () => fetchTrends(false))
         </div>
       </div>
 
-      <!-- View Mode Toggle - 4 options -->
-      <div class="flex items-center gap-1 bg-background-dark rounded-lg p-1">
+      <!-- View Mode Toggle - only show when not externally controlled -->
+      <div v-if="!hasExternalGranularity" class="flex items-center gap-1 bg-background-dark rounded-lg p-1">
         <button
           v-for="mode in viewModes"
           :key="mode.id"
-          @click="!isTransitioning && viewMode !== mode.id && (viewMode = mode.id)"
+          @click="!isTransitioning && internalViewMode !== mode.id && (internalViewMode = mode.id)"
           :disabled="isTransitioning"
           :class="[
             'px-3 py-1.5 text-xs rounded-md transition-colors whitespace-nowrap',
-            viewMode === mode.id
+            internalViewMode === mode.id
               ? 'bg-primary text-white'
               : isTransitioning
                 ? 'text-text-secondary/50 cursor-not-allowed'
@@ -376,6 +433,11 @@ watch(viewMode, () => fetchTrends(false))
       <div v-else class="h-[280px] relative">
         <canvas ref="chartCanvas"></canvas>
       </div>
+
+      <!-- Small print disclaimer -->
+      <p class="text-[10px] text-text-secondary/60 mt-3 text-right italic">
+        Costs do not include Access Charges
+      </p>
     </div>
   </div>
 </template>

@@ -210,6 +210,8 @@ const handleKeyDown = (e: KeyboardEvent) => {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault()
     sendMessage()
+  } else if (e.key === 'Escape') {
+    emit('close')
   }
 }
 

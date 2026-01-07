@@ -1,154 +1,187 @@
 <!--
-Sync Impact Report
-==================
-Version change: 0.0.0 → 1.0.0 (MAJOR - initial ratification)
-Modified principles: N/A (initial version)
-Added sections: Core Principles (5), Technology & Performance Standards, Development Workflow, Governance
+================================================================================
+SYNC IMPACT REPORT
+================================================================================
+Version change: 0.0.0 → 1.0.0 (MAJOR - initial constitution ratification)
+
+Modified principles: N/A (initial creation)
+
+Added sections:
+  - Core Principles (7 principles)
+  - Technology Stack Constraints
+  - Development Workflow
+  - Governance
+
 Removed sections: None
+
 Templates requiring updates:
-  - .specify/templates/plan-template.md ✅ (compatible - Constitution Check section exists)
-  - .specify/templates/spec-template.md ✅ (compatible - requirements structure aligns)
-  - .specify/templates/tasks-template.md ✅ (compatible - phase structure supports principles)
+  - .specify/templates/plan-template.md ✅ (no changes needed - Constitution Check section exists)
+  - .specify/templates/spec-template.md ✅ (no changes needed - compatible structure)
+  - .specify/templates/tasks-template.md ✅ (no changes needed - compatible structure)
+
 Follow-up TODOs: None
+================================================================================
 -->
 
-# MQTTServer Constitution
+# PVE1 Ecosystem Constitution
 
 ## Core Principles
 
-### I. Protocol Compliance
+### I. API-First Design
 
-All MQTT broker functionality MUST strictly adhere to the MQTT specification.
+Every feature MUST begin with API contract definition before implementation.
 
-- MQTT 3.1.1 (OASIS Standard) compliance is REQUIRED for baseline functionality
-- MQTT 5.0 support SHOULD be implemented for enhanced features (session expiry,
-  reason codes, shared subscriptions)
-- Protocol deviations MUST be explicitly documented and justified
-- Interoperability with standard MQTT clients is NON-NEGOTIABLE
+- All external-facing functionality MUST be exposed through versioned REST APIs
+- API contracts MUST be documented with request/response schemas before coding begins
+- Breaking changes MUST increment the API major version (v1 → v2)
+- Internal services SHOULD communicate via well-defined interfaces, not direct database access
+- HATEOAS links MUST be included in API responses for discoverability
 
-**Rationale**: An MQTT server that deviates from the specification breaks client
-expectations and ecosystem compatibility.
+**Rationale**: Contract-first development prevents integration issues, enables parallel frontend/backend work, and ensures external systems can rely on stable interfaces.
 
-### II. Reliability First
+### II. Data Separation
 
-Message delivery guarantees MUST be honored according to the requested QoS level.
+Sensitive data MUST be isolated from display/UI data through separate storage layers.
 
-- QoS 0 (At most once): Fire-and-forget delivery
-- QoS 1 (At least once): Guaranteed delivery with possible duplicates
-- QoS 2 (Exactly once): Guaranteed single delivery via 4-way handshake
-- Session state MUST persist across reconnections when Clean Session is false
-- Retained messages MUST be delivered to new subscribers as specified
+- Authentication credentials (ki, opc, PIN/PUK codes) MUST reside in provisioning tables only
+- UI-facing tables MUST NOT contain sensitive telecom keys or authentication secrets
+- Database triggers MUST sync state changes between provisioning and display tables
+- Status mapping between domains MUST be explicit and documented
+- API responses MUST never expose sensitive keys to frontend clients
 
-**Rationale**: MQTT's core value proposition is reliable messaging. Violating QoS
-contracts breaks application correctness guarantees.
+**Rationale**: Separation of concerns reduces attack surface, simplifies UI development, and ensures sensitive telecom data remains isolated from general application access.
 
-### III. Test-First Development (NON-NEGOTIABLE)
+### III. Security by Default
 
-All features MUST follow Test-Driven Development practices.
+All endpoints MUST implement authentication and authorization unless explicitly public.
 
-- Tests written BEFORE implementation code
-- Red-Green-Refactor cycle strictly enforced
-- Protocol conformance tests MUST cover all MQTT control packet types
-- Integration tests MUST validate client-broker interactions
-- No feature is complete without passing tests
+- API endpoints MUST require API key or JWT authentication (except /health endpoints)
+- Passwords MUST be hashed using bcrypt or equivalent
+- JWTs MUST have expiration times and MUST be validated on every request
+- Input MUST be validated and sanitized before database operations
+- SQL queries MUST use parameterized statements, never string concatenation
+- CORS MUST be configured to allow only known origins in production
 
-**Rationale**: MQTT protocol complexity requires rigorous testing. Untested code
-leads to subtle interoperability bugs that are expensive to diagnose.
+**Rationale**: Security vulnerabilities are expensive to fix post-deployment. Secure-by-default ensures protection is built-in rather than bolted-on.
 
-### IV. Security by Design
+### IV. State Machine Integrity
 
-Security MUST be considered from the initial design phase, not retrofitted.
+Entity state transitions MUST be validated against allowed transition rules.
 
-- TLS 1.2+ MUST be supported for encrypted connections
-- Authentication mechanisms MUST be pluggable (username/password, certificates,
-  tokens)
-- Authorization MUST support topic-level access control (publish/subscribe
-  permissions)
-- Credentials MUST never be logged or exposed in error messages
-- Default configurations MUST be secure (no anonymous access in production)
+- State changes MUST follow documented state machine diagrams
+- Invalid state transitions MUST be rejected with clear error messages
+- All state transitions MUST be logged to audit tables with timestamp and actor
+- Webhooks MUST be triggered on state change events for external system notification
+- Previous state MUST be preserved when blocking/suspending to enable restoration
 
-**Rationale**: IoT deployments are high-value attack targets. Security failures
-have real-world consequences beyond data breaches.
+**Rationale**: SIM lifecycle management requires strict state control. Invalid transitions can cause billing errors, service disruptions, and compliance violations.
 
 ### V. Observability
 
-The system MUST provide visibility into its operational state.
+All services MUST expose health, metrics, and structured logging.
 
-- Structured logging REQUIRED for all connection lifecycle events
-- Metrics MUST be exposed for: connections, messages/sec, subscription counts,
-  memory usage
-- Debug mode MUST provide protocol-level packet tracing
-- Health check endpoints REQUIRED for orchestration integration
-- Errors MUST include correlation IDs for request tracing
+- Health endpoints MUST return service status and dependency health
+- Prometheus metrics MUST be exposed for key operations (request count, latency, errors)
+- Logs MUST be structured JSON with correlation IDs for request tracing
+- Audit logs MUST capture who, what, when for all data modifications
+- Dashboard visualizations MUST be available for key system metrics (Grafana)
 
-**Rationale**: Production MQTT brokers handle thousands of connections. Without
-observability, debugging issues becomes impossible.
+**Rationale**: Production systems require visibility into behavior. Observability enables rapid diagnosis, capacity planning, and SLA compliance verification.
 
-## Technology & Performance Standards
+### VI. Configuration Isolation
 
-### Technology Stack
+Secrets and environment-specific configuration MUST be externalized from code.
 
-- Implementation language and framework to be determined during planning phase
-- Dependencies MUST be actively maintained (no abandoned libraries)
-- External dependencies MUST be justified and minimized
+- Database credentials MUST come from environment variables, never hardcoded
+- API URLs MUST be configurable via environment (VITE_API_URL, MQTT_BROKER_URL)
+- Docker services MUST use .env files for configuration injection
+- Production secrets MUST NOT be committed to version control
+- Default configurations MUST be safe (fail-closed, minimal permissions)
 
-### Performance Targets
+**Rationale**: Configuration isolation enables secure deployments across environments and prevents accidental secret exposure in repositories.
 
-- Connection handling: Target 10,000+ concurrent connections
-- Message throughput: Target 100,000+ messages/second
-- Latency: p99 message delivery under 10ms for QoS 0
-- Memory: Efficient per-connection overhead (target <10KB per idle connection)
+### VII. Contract Testing
 
-### Constraints
+API contracts MUST be validated through automated tests before deployment.
 
-- Startup time: Under 5 seconds to accepting connections
-- Graceful shutdown: Drain existing connections with configurable timeout
-- Resource limits: Configurable max connections, max message size, max
-  subscriptions per client
+- Each API endpoint MUST have at least one contract test verifying schema compliance
+- State transition endpoints MUST have tests for valid and invalid transitions
+- Integration tests MUST verify database triggers sync data correctly
+- Test API keys MUST be provisioned via migrations for consistent test environments
+- CI/CD pipelines MUST run contract tests before allowing merge to main
+
+**Rationale**: Contract tests catch breaking changes early, ensure API stability for external integrators, and provide confidence during refactoring.
+
+## Technology Stack Constraints
+
+### Required Technologies
+
+| Layer | Technology | Version | Notes |
+|-------|------------|---------|-------|
+| Frontend | Vue 3 + TypeScript | 3.4+ / 5.3+ | Composition API required |
+| UI Components | PrimeVue | 4.x | Standard component library |
+| Build Tool | Vite | Latest | Fast HMR and builds |
+| Database | Supabase (PostgreSQL) | Latest | Primary data store |
+| Messaging | EMQX (MQTT) | 5.x | Real-time device communication |
+| API Server | Node.js + Express | 18+ | Local development and serverless |
+| Deployment | Vercel | - | Serverless functions + static hosting |
+| Containerization | Docker Compose | - | Local development environment |
+
+### Prohibited Patterns
+
+- Direct DOM manipulation (use Vue reactivity)
+- Inline SQL strings (use parameterized queries)
+- Storing secrets in frontend code
+- Synchronous database calls in request handlers
+- Hardcoded URLs or credentials
 
 ## Development Workflow
 
-### Code Quality Gates
+### Code Review Requirements
 
-- All code MUST pass linting before commit
-- All tests MUST pass before merge
-- Code review REQUIRED for all changes
-- Breaking changes MUST be documented in changelog
+- All changes MUST be submitted via pull request
+- PRs MUST pass automated tests before review
+- Security-sensitive changes MUST be reviewed by a second developer
+- API contract changes MUST include updated documentation
 
-### Commit Standards
+### Testing Gates
 
-- Commits MUST be atomic and focused
-- Commit messages MUST follow conventional commits format
-- Feature branches MUST be rebased before merge
+| Gate | Requirement |
+|------|-------------|
+| Pre-commit | Linting passes (ESLint, TypeScript) |
+| PR Creation | Unit tests pass |
+| PR Merge | Contract tests pass, integration tests pass |
+| Deployment | Health checks pass in staging |
 
-### Documentation Requirements
+### Deployment Process
 
-- Public APIs MUST be documented
-- Configuration options MUST be documented with examples
-- Protocol extensions or deviations MUST be documented
+1. Changes merged to main trigger automatic Vercel deployment
+2. Preview deployments created for all pull requests
+3. Database migrations MUST be applied before code deployment
+4. Rollback plan MUST exist for breaking changes
 
 ## Governance
 
-This constitution is the authoritative reference for project development
-standards. All contributions MUST comply with these principles.
+This constitution supersedes all other development practices for the PVE1 ecosystem.
 
-### Amendment Process
+### Amendment Procedure
 
-1. Proposed changes MUST be documented with rationale
-2. Changes MUST be reviewed and approved before adoption
-3. Breaking changes to principles require migration plan
-4. All amendments MUST update the version and Last Amended date
+1. Propose amendment via pull request to constitution.md
+2. Document rationale for change
+3. Obtain approval from project maintainers
+4. Update dependent templates if principles change
+5. Increment version according to semantic versioning
 
 ### Versioning Policy
 
-- MAJOR: Removal or incompatible redefinition of principles
-- MINOR: New principles or materially expanded guidance
-- PATCH: Clarifications, wording improvements, typo fixes
+- **MAJOR**: Principle removal, redefinition, or backward-incompatible governance change
+- **MINOR**: New principle added, section expanded, or material guidance added
+- **PATCH**: Clarification, typo fix, or non-semantic refinement
 
-### Compliance
+### Compliance Review
 
-- Pull requests MUST verify compliance with all principles
-- Complexity beyond these standards MUST be explicitly justified
-- Constitution violations block merge
+- PRs SHOULD reference applicable principles when relevant
+- Violations MUST be documented and justified if approved
+- Periodic audits SHOULD verify codebase compliance with principles
 
-**Version**: 1.0.0 | **Ratified**: 2025-12-14 | **Last Amended**: 2025-12-14
+**Version**: 1.0.0 | **Ratified**: 2025-01-07 | **Last Amended**: 2025-01-07

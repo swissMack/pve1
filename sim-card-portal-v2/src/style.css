@@ -216,3 +216,132 @@ a:hover {
   padding: 0.75rem !important;
   text-align: center !important;
 }
+
+/* PrimeVue MultiSelect Overlay Panel - Dark Theme */
+.p-multiselect-overlay {
+  background: var(--surface-dark, #18222c) !important;
+  border: 1px solid var(--border-dark, #283039) !important;
+  border-radius: 0.5rem !important;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* MultiSelect header (contains filter and select all) */
+.p-multiselect-overlay .p-multiselect-header {
+  background: var(--surface-dark, #18222c) !important;
+  border-bottom: 1px solid var(--border-dark, #283039) !important;
+  padding: 0.75rem !important;
+}
+
+/* MultiSelect filter input */
+.p-multiselect-overlay .p-multiselect-filter-container {
+  flex: 1;
+}
+
+.p-multiselect-overlay .p-multiselect-filter {
+  background: var(--background-dark, #101922) !important;
+  border: 1px solid var(--border-dark, #283039) !important;
+  color: white !important;
+  border-radius: 0.375rem !important;
+  padding: 0.5rem 0.75rem !important;
+  width: 100% !important;
+}
+
+.p-multiselect-overlay .p-multiselect-filter:focus {
+  border-color: var(--primary, #137fec) !important;
+  box-shadow: 0 0 0 2px rgba(19, 127, 236, 0.2) !important;
+  outline: none !important;
+}
+
+.p-multiselect-overlay .p-multiselect-filter::placeholder {
+  color: var(--text-secondary, #9faab6) !important;
+}
+
+/* Filter icon */
+.p-multiselect-overlay .p-multiselect-filter-icon {
+  color: var(--text-secondary, #9faab6) !important;
+}
+
+/* MultiSelect items wrapper */
+.p-multiselect-overlay .p-multiselect-items-wrapper {
+  background: var(--surface-dark, #18222c) !important;
+}
+
+.p-multiselect-overlay .p-multiselect-items {
+  padding: 0.25rem !important;
+  background: var(--surface-dark, #18222c) !important;
+}
+
+/* Individual MultiSelect items */
+.p-multiselect-overlay .p-multiselect-item {
+  color: var(--text-secondary, #9faab6) !important;
+  padding: 0.625rem 0.75rem !important;
+  border-radius: 0.375rem !important;
+  margin: 0.125rem 0 !important;
+  background: transparent !important;
+}
+
+.p-multiselect-overlay .p-multiselect-item:hover {
+  background: var(--surface-dark-highlight, #202b36) !important;
+  color: white !important;
+}
+
+.p-multiselect-overlay .p-multiselect-item.p-highlight {
+  background: rgba(19, 127, 236, 0.15) !important;
+  color: white !important;
+}
+
+.p-multiselect-overlay .p-multiselect-item.p-focus {
+  background: var(--surface-dark-highlight, #202b36) !important;
+  color: white !important;
+}
+
+/* Checkboxes in MultiSelect */
+.p-multiselect-overlay .p-checkbox {
+  margin-right: 0.5rem !important;
+}
+
+.p-multiselect-overlay .p-checkbox .p-checkbox-box {
+  background: var(--background-dark, #101922) !important;
+  border: 1px solid var(--border-dark, #283039) !important;
+  border-radius: 0.25rem !important;
+  width: 1.25rem !important;
+  height: 1.25rem !important;
+}
+
+.p-multiselect-overlay .p-checkbox .p-checkbox-box:hover {
+  border-color: var(--primary, #137fec) !important;
+}
+
+.p-multiselect-overlay .p-checkbox.p-highlight .p-checkbox-box {
+  background: var(--primary, #137fec) !important;
+  border-color: var(--primary, #137fec) !important;
+}
+
+.p-multiselect-overlay .p-checkbox .p-checkbox-box .p-checkbox-icon {
+  color: white !important;
+}
+
+/* Close button in header */
+.p-multiselect-overlay .p-multiselect-close {
+  color: var(--text-secondary, #9faab6) !important;
+  background: transparent !important;
+  border: none !important;
+}
+
+.p-multiselect-overlay .p-multiselect-close:hover {
+  color: white !important;
+  background: var(--surface-dark-highlight, #202b36) !important;
+  border-radius: 0.25rem !important;
+}
+
+/* Empty message */
+.p-multiselect-overlay .p-multiselect-empty-message {
+  color: var(--text-secondary, #9faab6) !important;
+  padding: 0.75rem !important;
+  text-align: center !important;
+}
+
+/* Select All checkbox in header */
+.p-multiselect-overlay .p-multiselect-select-all {
+  margin-right: 0.5rem !important;
+}

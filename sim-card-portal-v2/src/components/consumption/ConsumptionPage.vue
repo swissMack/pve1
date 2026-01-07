@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, reactive, computed, onMounted } from 'vue'
 import KPICards from './KPICards.vue'
 import DateRangeSelector from './DateRangeSelector.vue'
 import ConsumptionTrendsChart from './ConsumptionTrendsChart.vue'
@@ -8,6 +8,10 @@ import RegionalUsageMap from './RegionalUsageMap.vue'
 import InvoiceHistoryTable from './InvoiceHistoryTable.vue'
 import AskBobPane from './AskBobPane.vue'
 import ExportModal from './ExportModal.vue'
+import TimeGranularityToggle from './TimeGranularityToggle.vue'
+import FilterPanel from './FilterPanel.vue'
+import UsageResultsTable from './UsageResultsTable.vue'
+import type { TimeGranularity, FilterCriteria, LoadingState } from '@/types/analytics'
 
 // Types
 interface DateRange {
@@ -30,10 +34,81 @@ const showAskBob = ref(false)
 const showExportModal = ref(false)
 const refreshKey = ref(0)
 
+// Unified filter state for all panes
+const granularity = ref<TimeGranularity>('monthly')
+
+// Filter criteria combining granularity and other filters (for US2)
+const filterCriteria = reactive<FilterCriteria>({
+  granularity: 'monthly',
+  networks: [],
+  imsis: []
+})
+
+// Loading state per pane
+const loading = reactive<LoadingState>({
+  trends: false,
+  carriers: false,
+  regional: false,
+  results: false
+})
+
+// Track if any pane is loading (disables toggle during refresh)
+const isAnyLoading = computed(() =>
+  loading.trends || loading.carriers || loading.regional || loading.results
+)
+
+// Available filter options (populated from API/child components)
+const availableMccmncs = ref<string[]>([])
+const availableImsis = ref<string[]>([])
+
+// Fetch available filter options
+const fetchFilterOptions = async () => {
+  try {
+    // Fetch available MCCMNCs from carriers endpoint
+    const carriersResponse = await fetch('/api/consumption/carriers')
+    const carriersResult = await carriersResponse.json()
+    if (carriersResult.success && carriersResult.data) {
+      // Extract unique MCCMNCs from carriers
+      const mccmncs = carriersResult.data
+        .map((c: { mccmnc?: string }) => c.mccmnc)
+        .filter((m: string | undefined): m is string => !!m)
+      availableMccmncs.value = [...new Set(mccmncs)] as string[]
+    }
+
+    // Fetch available IMSIs from unique IMSI count endpoint
+    const imsiResponse = await fetch('/api/consumption/unique-imsis')
+    const imsiResult = await imsiResponse.json()
+    if (imsiResult.success && imsiResult.data) {
+      availableImsis.value = imsiResult.data
+        .map((i: { imsi?: string }) => i.imsi)
+        .filter((i: string | undefined): i is string => !!i)
+    }
+  } catch (error) {
+    console.warn('Failed to fetch filter options:', error)
+  }
+}
+
+// Check if any advanced filters are active
+const hasActiveFilters = computed(() =>
+  filterCriteria.networks.length > 0 || filterCriteria.imsis.length > 0
+)
+
+// Handle loading state updates from child components
+const handleLoadingChange = (pane: keyof LoadingState, isLoading: boolean) => {
+  loading[pane] = isLoading
+}
+
 // Methods
 const handleDateRangeChange = (newRange: DateRange) => {
   dateRange.value = newRange
   refreshKey.value++
+}
+
+// Handle granularity change - sync with filter criteria and refresh all panes
+const handleGranularityChange = (newGranularity: TimeGranularity) => {
+  granularity.value = newGranularity
+  filterCriteria.granularity = newGranularity
+  refreshKey.value++ // Trigger refresh of all panes
 }
 
 const toggleAskBob = () => {
@@ -48,10 +123,35 @@ const closeExportModal = () => {
   showExportModal.value = false
 }
 
+// Handle filter changes from FilterPanel
+const handleFilterUpdate = (newFilters: Partial<FilterCriteria>) => {
+  if (newFilters.networks !== undefined) {
+    filterCriteria.networks = newFilters.networks
+  }
+  if (newFilters.imsis !== undefined) {
+    filterCriteria.imsis = newFilters.imsis
+  }
+}
+
+// Handle filter apply - refresh all panes
+const handleFilterApply = () => {
+  refreshKey.value++
+}
+
+// Handle filter clear
+const handleFilterClear = () => {
+  filterCriteria.networks = []
+  filterCriteria.imsis = []
+  refreshKey.value++
+}
+
 // Watch for refresh trigger from parent
 watch(() => props.refreshKey, () => {
   refreshKey.value++
 })
+
+// Fetch filter options on mount
+onMounted(fetchFilterOptions)
 </script>
 
 <template>
@@ -68,6 +168,15 @@ watch(() => props.refreshKey, () => {
         </div>
 
         <div class="flex items-center gap-3">
+          <!-- Unified Time Granularity Toggle -->
+          <TimeGranularityToggle
+            :modelValue="granularity"
+            :disabled="isAnyLoading"
+            @update:modelValue="handleGranularityChange"
+          />
+
+          <div class="h-6 w-px bg-border-dark hidden lg:block"></div>
+
           <DateRangeSelector
             :initialRange="dateRange"
             @change="handleDateRangeChange"
@@ -104,18 +213,67 @@ watch(() => props.refreshKey, () => {
         <!-- KPI Cards Row -->
         <KPICards :key="`kpi-${refreshKey}`" :dateRange="dateRange" />
 
+        <!-- Advanced Filters Panel -->
+        <FilterPanel
+          :key="`filters-${refreshKey}`"
+          :modelValue="filterCriteria"
+          :disabled="isAnyLoading"
+          :availableMccmncs="availableMccmncs"
+          :availableImsis="availableImsis"
+          @update:modelValue="handleFilterUpdate"
+          @apply="handleFilterApply"
+          @clear="handleFilterClear"
+        />
+
+        <!-- No Data Message when filters active but no results -->
+        <div
+          v-if="hasActiveFilters && !isAnyLoading"
+          class="bg-surface-dark rounded-xl border border-border-dark p-6 text-center"
+        >
+          <div class="flex flex-col items-center gap-3">
+            <span class="material-symbols-outlined text-4xl text-text-secondary">filter_alt_off</span>
+            <p class="text-text-secondary">
+              Filters are active. If no data appears, try adjusting your filter criteria.
+            </p>
+          </div>
+        </div>
+
         <!-- Charts, Map, and Invoices Grid -->
         <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
           <!-- Left Column: Trends Chart + Regional Map + Invoice History stacked -->
           <div class="xl:col-span-2 flex flex-col gap-6">
-            <ConsumptionTrendsChart :key="`trends-${refreshKey}`" :dateRange="dateRange" />
-            <RegionalUsageMap :key="`map-${refreshKey}`" />
+            <ConsumptionTrendsChart
+              :key="`trends-${refreshKey}`"
+              :dateRange="dateRange"
+              :granularity="granularity"
+              :filters="filterCriteria"
+              @loading="(isLoading: boolean) => handleLoadingChange('trends', isLoading)"
+            />
+            <RegionalUsageMap
+              :key="`map-${refreshKey}`"
+              :granularity="granularity"
+              :filters="filterCriteria"
+              @loading="(isLoading: boolean) => handleLoadingChange('regional', isLoading)"
+            />
+            <UsageResultsTable
+              :key="`usage-${refreshKey}`"
+              :dateRange="dateRange"
+              :granularity="granularity"
+              :filters="filterCriteria"
+              @loading="(isLoading: boolean) => handleLoadingChange('results', isLoading)"
+            />
             <InvoiceHistoryTable :key="`invoices-${refreshKey}`" :dateRange="dateRange" />
           </div>
 
           <!-- Right Column: Carrier Breakdown -->
           <div>
-            <TopCarriersBreakdown :key="`carriers-${refreshKey}`" :dateRange="dateRange" />
+            <TopCarriersBreakdown
+              :key="`carriers-${refreshKey}`"
+              :dateRange="dateRange"
+              :granularity="granularity"
+              :filters="filterCriteria"
+              @loading="(isLoading: boolean) => handleLoadingChange('carriers', isLoading)"
+            />
           </div>
         </div>
       </div>

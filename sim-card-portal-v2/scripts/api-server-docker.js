@@ -1069,6 +1069,71 @@ app.post("/api/settings/currency", async (req, res) => {
   }
 })
 
+// GET /api/consumption/usage-details - Get detailed usage records per IMSI
+app.get('/api/consumption/usage-details', async (req, res) => {
+  try {
+    const { start_date, end_date, granularity = 'monthly' } = req.query
+
+    if (!start_date || !end_date) {
+      return res.status(400).json({
+        success: false,
+        error: 'start_date and end_date are required'
+      })
+    }
+
+    // Query usage records grouped by ICCID/IMSI
+    const result = await pool.query(`
+      SELECT
+        iccid,
+        SUM(total_bytes) as total_bytes,
+        COUNT(*) as record_count,
+        MAX(period_end) as latest_event_at
+      FROM ${SCHEMA}usage_records
+      WHERE period_start >= $1 AND period_end <= $2
+      GROUP BY iccid
+      ORDER BY total_bytes DESC
+    `, [start_date, end_date])
+
+    const data = result.rows.map(row => ({
+      imsi: row.iccid,
+      mccmnc: 'Unknown',
+      bytes: parseInt(row.total_bytes) || 0,
+      ...(granularity === 'daily' || granularity === '24h'
+        ? { day: start_date }
+        : granularity === 'monthly'
+          ? { month: start_date.substring(0, 7) }
+          : { year: start_date.substring(0, 4) }
+      ),
+      latestEventAt: row.latest_event_at || new Date().toISOString()
+    }))
+
+    res.json({ success: true, data, cached: false })
+  } catch (error) {
+    console.error('Error fetching usage details:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// GET /api/consumption/unique-imsis - Get unique IMSI values for filters
+app.get('/api/consumption/unique-imsis', async (req, res) => {
+  try {
+    // Query unique ICCIDs from usage_records or provisioned_sims
+    const result = await pool.query(`
+      SELECT DISTINCT iccid as imsi
+      FROM ${SCHEMA}usage_records
+      WHERE iccid IS NOT NULL
+      ORDER BY iccid
+    `)
+
+    const data = result.rows.map(row => ({ imsi: row.imsi }))
+
+    res.json({ success: true, data, cached: false })
+  } catch (error) {
+    console.error('Error fetching unique IMSIs:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
 app.get('/api/consumption/carrier-locations', async (req, res) => {
   try {
     // Get devices with their SIM cards and carrier info

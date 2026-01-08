@@ -1,7 +1,7 @@
 # Quickstart: Consumption Filters with LLM Integration
 
 **Feature Branch**: `003-consumption-filters-llm`
-**Date**: 2025-01-07
+**Date**: 2025-01-08 (Updated)
 
 ## Overview
 
@@ -30,6 +30,9 @@ MCCMNC_API_URL=https://mcc-mnc.net/api
 ANALYTICS_OAUTH_CLIENT_ID=sim-portal
 ANALYTICS_OAUTH_CLIENT_SECRET=<your-secret>
 KEYCLOAK_URL=http://keycloak:8080/realms/Demo-Realm
+
+# Optional: Enable audit logging in production (auto-enabled in dev)
+VITE_AUDIT_LOG=false
 ```
 
 ## Quick Test
@@ -57,9 +60,13 @@ Open http://localhost:5173 and navigate to the Consumption page from the sidebar
 
 1. Click "Filters" to open the filter panel
 2. Select one or more networks from the MCCMNC dropdown
-3. Optionally search and select IMSIs
-4. Click "Apply" and verify all panes filter to selected criteria
-5. Click "Clear Filters" to reset
+3. Set custom date range using Start/End date pickers (optional)
+4. Test IMSI filter modes:
+   - **Single**: Enter one IMSI value
+   - **Multiple**: Add/remove multiple IMSI rows using +/- buttons
+   - **Range**: Enter from/to IMSI values for a range query
+5. Click "Apply" and verify all panes filter to selected criteria
+6. Click "Clear Filters" to reset
 
 ### 5. Test Usage Results Table
 
@@ -93,8 +100,15 @@ Open http://localhost:5173 and navigate to the Consumption page from the sidebar
 
 | File | Description |
 |------|-------------|
-| `src/services/analyticsService.ts` | Analytics API client with session caching |
+| `src/services/analyticsService.ts` | Analytics API client with session caching and optimized cache keys |
 | `src/services/mccmncService.ts` | MCC-MNC reference API client |
+| `src/services/auditLogger.ts` | Structured audit logging for filter changes, API calls, exports |
+
+### Utilities
+
+| File | Description |
+|------|-------------|
+| `src/utils/debounce.ts` | Debounce, throttle, and useDebouncedRef utilities for performance |
 
 ### API Endpoints
 
@@ -150,6 +164,33 @@ Open http://localhost:5173 and navigate to the Consumption page from the sidebar
 - First load may be slower; subsequent requests use cache
 - Large datasets (>10,000 records) display pagination warning
 - CSV export may take up to 10 seconds for large datasets
+- Filter changes are debounced (150ms) to prevent excessive API calls
+- Cache key generation uses djb2 hashing with memoization for speed
+
+## Audit Logging
+
+All filter changes, API calls, and exports are logged for debugging and compliance:
+
+```typescript
+// Enable verbose console logging (auto-enabled in dev)
+import { setConsoleLogging } from '@/services/auditLogger'
+setConsoleLogging(true)
+
+// View log history
+import { getLogHistory, clearLogHistory } from '@/services/auditLogger'
+console.log(getLogHistory())  // Get all logged events
+clearLogHistory()             // Clear session logs
+```
+
+**Log Actions Tracked**:
+- `FILTER_APPLY` / `FILTER_CLEAR` - Filter panel interactions
+- `GRANULARITY_CHANGE` - Time toggle changes
+- `API_REQUEST` / `API_SUCCESS` / `API_ERROR` - Analytics API calls
+- `API_CACHE_HIT` - Cached response used
+- `EXPORT_CSV` - CSV downloads
+- `ASKBOB_QUERY` - LLM queries
+
+**Environment Variable**: Set `VITE_AUDIT_LOG=true` to enable console logging in production.
 
 ## Next Steps
 

@@ -887,13 +887,14 @@ app.get('/api/consumption/trends', async (req, res) => {
 // GET /api/consumption/carriers - Get carrier breakdown
 app.get('/api/consumption/carriers', async (req, res) => {
   try {
-    // Get carrier data from sim_cards table
+    // Get carrier data by joining sim_cards with carriers table
     const result = await pool.query(
       "SELECT c.name as carrier, COUNT(*) as sim_count, " +
-      "COALESCE(SUM(CASE WHEN s.data_used ~ '^[0-9.]+$' THEN s.data_used::NUMERIC ELSE 0 END), 0) as total_data " +
-      "FROM " + SCHEMA + "sim_cards s LEFT JOIN " + SCHEMA + "carriers c ON s.carrier_id = c.id " +
+      "COALESCE(SUM(CASE WHEN s.data_used ~ '^[0-9.]+' THEN REGEXP_REPLACE(s.data_used, '[^0-9.]', '', 'g')::NUMERIC ELSE 0 END), 0) as total_data " +
+      "FROM " + SCHEMA + "sim_cards s " +
+      "LEFT JOIN " + SCHEMA + "carriers c ON s.carrier_id = c.id " +
       "WHERE c.name IS NOT NULL " +
-      "GROUP BY c.name ORDER BY total_data DESC"
+      "GROUP BY c.name ORDER BY sim_count DESC"
     )
 
     const totalData = result.rows.reduce((sum, row) => sum + parseFloat(row.total_data), 0)
@@ -1010,26 +1011,16 @@ app.get('/api/consumption/invoices', async (req, res) => {
 })
 
 // GET /api/settings/currency - Get display currency
+// Uses PostgreSQL pool directly (connects to Supabase PostgreSQL)
 app.get("/api/settings/currency", async (req, res) => {
   try {
     let currency = "EUR"
-    if (isSupabaseConfigured()) {
-      const { data, error } = await supabase
-        .from("app_settings")
-        .select("value")
-        .eq("key", "display_currency")
-        .single()
-      if (data && data.value) {
-        currency = String(data.value).replace(/\"/g, "")
-      }
-    } else {
-      const result = await pool.query(
-        "SELECT value FROM " + SCHEMA + "app_settings WHERE key = $1",
-        ["display_currency"]
-      )
-      if (result.rows.length > 0 && result.rows[0].value) {
-        currency = String(result.rows[0].value).replace(/\"/g, "")
-      }
+    const result = await pool.query(
+      "SELECT value FROM " + SCHEMA + "app_settings WHERE key = $1",
+      ["display_currency"]
+    )
+    if (result.rows.length > 0 && result.rows[0].value) {
+      currency = String(result.rows[0].value).replace(/\"/g, "")
     }
     res.json({ success: true, currency })
   } catch (error) {
@@ -1039,29 +1030,19 @@ app.get("/api/settings/currency", async (req, res) => {
 })
 
 // POST /api/settings/currency - Set display currency
+// Uses PostgreSQL pool directly (connects to Supabase PostgreSQL)
 app.post("/api/settings/currency", async (req, res) => {
   try {
     const { currency } = req.body
     if (!currency) {
       return res.status(400).json({ success: false, error: "Currency is required" })
     }
-    
-    if (isSupabaseConfigured()) {
-      const { error } = await supabase
-        .from("app_settings")
-        .upsert({
-          key: "display_currency",
-          value: JSON.stringify(currency),
-          updated_at: new Date().toISOString()
-        })
-      if (error) throw error
-    } else {
-      await pool.query(
-        "INSERT INTO " + SCHEMA + "app_settings (key, value, updated_at) VALUES ($1, $2, NOW()) " +
-        "ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()",
-        ["display_currency", JSON.stringify(currency)]
-      )
-    }
+
+    await pool.query(
+      "INSERT INTO " + SCHEMA + "app_settings (key, value, updated_at) VALUES ($1, $2, NOW()) " +
+      "ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()",
+      ["display_currency", JSON.stringify(currency)]
+    )
     res.json({ success: true, currency })
   } catch (error) {
     console.error("Error setting currency:", error)

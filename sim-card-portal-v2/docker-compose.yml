@@ -6,10 +6,12 @@ services:
       dockerfile: docker/Dockerfile.api
     container_name: simcard-portal-api
     environment:
-      # Using local Supabase PostgreSQL (on Proxmox)
-      # Supabase env vars removed to use PostgreSQL fallback
+      # Supabase configuration - enables Supabase client for app_settings, exchange_rates
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
       USE_PUBLIC_SCHEMA: "true"
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # PostgreSQL connection (connects to Supabase PostgreSQL)
       DB_HOST: ${DB_HOST:-localhost}
       DB_PORT: ${DB_PORT:-5432}
       DB_USER: ${DB_USER:-postgres}

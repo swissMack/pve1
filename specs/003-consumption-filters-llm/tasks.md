@@ -69,7 +69,7 @@ Based on plan.md structure:
 - [x] T017 [US1] Modify RegionalUsageMap.vue to accept external granularity prop and fetch data via analyticsService
 - [x] T018 [US1] Wire TimeGranularityToggle to ConsumptionPage.vue filter state with loading indicators on all panes
 - [x] T019 [US1] Implement simultaneous data refresh for all panes when granularity changes
-- [ ] T020 [US1] [DEFERRED] Add custom date range picker integration with granularity (period/periodEnd parameters) - existing DateRangeSelector works independently; full integration deferred
+- [x] T020 [US1] Add custom date range picker integration - Start/End date pickers added to FilterPanel with filter criteria integration
 
 **Checkpoint**: Unified time filtering works - all three panes update simultaneously when granularity changes
 
@@ -225,19 +225,19 @@ Based on plan.md structure:
 |-------|--------|-------|
 | Phase 1: Setup | ✅ Complete | T001-T003 |
 | Phase 2: Foundational | ✅ Complete | T004-T012 |
-| Phase 3: US1 Time Filtering | ✅ Complete | T013-T019 (T020 deferred) |
+| Phase 3: US1 Time Filtering | ✅ Complete | T013-T020 |
 | Phase 4: US2 Filter Fields | ✅ Complete | T021-T029, enhanced with date pickers & IMSI modes |
 | Phase 5: US3 Usage Table | ✅ Complete | T030-T037 |
 | Phase 6: US4 AskBob LLM | ✅ Complete | T038-T045 |
 | Phase 7: Polish | ✅ Complete | T046-T050, T053-T054 (T051-T052 deferred) |
 
 **Post-Implementation Enhancements (2025-01-08)**:
+- T020 completed: Date range picker integration via FilterPanel (was originally deferred)
 - T021 expanded: Added Start/End date pickers to FilterPanel for IMSI-specific date ranges
 - T023 expanded: IMSI filter now supports three modes (Single, Multiple with add/remove rows, Range)
 - T053 added: Global dark theme CSS for PrimeVue MultiSelect overlay (fixes portal rendering)
 - T054 added: Cost disclaimer footer in ConsumptionTrendsChart
 
 **Deferred Items**:
-- T020: Custom date range + granularity integration
 - T051: Structured logging for audit trail
 - T052: Performance optimization (debounce, cache optimization)

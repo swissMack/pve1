@@ -330,8 +330,7 @@ const updateChart = () => {
     return
   }
 
-  // Chart was already destroyed at fetch start, just create new one
-  // Double-check it's destroyed to be safe
+  // Simple approach: destroy existing chart and create new one
   if (chartInstance.value) {
     destroyChart()
   }

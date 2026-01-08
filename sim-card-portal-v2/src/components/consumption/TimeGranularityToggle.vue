@@ -36,10 +36,10 @@ const selectMode = (mode: TimeGranularity) => {
   if (!props.disabled && props.modelValue !== mode && !isProcessing.value) {
     isProcessing.value = true
     emit('update:modelValue', mode)
-    // Allow next click after 500ms - balances responsiveness with preventing excessive API calls
+    // Allow next click after animation completes (1000ms) plus buffer
     setTimeout(() => {
       isProcessing.value = false
-    }, 500)
+    }, 1100)
   }
 }
 </script>

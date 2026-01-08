@@ -30,21 +30,53 @@ const CACHE_PREFIX = 'analytics:'
 // Session Cache Utilities
 // ============================================================================
 
+// Cache key memoization for performance
+const cacheKeyMemo = new Map<string, string>()
+const CACHE_KEY_MEMO_MAX_SIZE = 100
+
+/**
+ * Fast hash function for cache key generation (djb2 algorithm)
+ * Much faster than JSON.stringify for repeated calls
+ */
+function fastHash(str: string): string {
+  let hash = 5381
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) + hash) ^ str.charCodeAt(i)
+  }
+  return (hash >>> 0).toString(36)
+}
+
 /**
  * Build a cache key from endpoint and parameters
+ * Optimized with memoization and fast hashing
  */
 function buildCacheKey(endpoint: string, params: Record<string, unknown>): string {
-  const sortedParams = Object.keys(params)
-    .sort()
-    .reduce((acc, key) => {
-      const value = params[key]
-      if (value !== undefined && value !== null) {
-        acc[key] = Array.isArray(value) ? value.sort().join(',') : String(value)
-      }
-      return acc
-    }, {} as Record<string, string>)
+  // Build a stable key representation
+  const keys = Object.keys(params).filter(k => params[k] !== undefined && params[k] !== null).sort()
+  const keyParts = keys.map(k => {
+    const v = params[k]
+    return `${k}=${Array.isArray(v) ? v.slice().sort().join(',') : v}`
+  })
+  const rawKey = `${endpoint}|${keyParts.join('&')}`
 
-  return `${CACHE_PREFIX}${endpoint}:${JSON.stringify(sortedParams)}`
+  // Check memoization cache
+  const memoized = cacheKeyMemo.get(rawKey)
+  if (memoized) {
+    return memoized
+  }
+
+  // Generate optimized cache key
+  const cacheKey = `${CACHE_PREFIX}${endpoint}:${fastHash(rawKey)}`
+
+  // Store in memo (with size limit)
+  if (cacheKeyMemo.size >= CACHE_KEY_MEMO_MAX_SIZE) {
+    // Remove oldest entries (first 20%)
+    const keysToRemove = Array.from(cacheKeyMemo.keys()).slice(0, CACHE_KEY_MEMO_MAX_SIZE / 5)
+    keysToRemove.forEach(k => cacheKeyMemo.delete(k))
+  }
+  cacheKeyMemo.set(rawKey, cacheKey)
+
+  return cacheKey
 }
 
 /**

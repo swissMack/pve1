@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, reactive, computed, onMounted } from 'vue'
+import { ref, watch, reactive, computed, onMounted, onUnmounted } from 'vue'
 import KPICards from './KPICards.vue'
 import DateRangeSelector from './DateRangeSelector.vue'
 import ConsumptionTrendsChart from './ConsumptionTrendsChart.vue'
@@ -13,6 +13,7 @@ import FilterPanel from './FilterPanel.vue'
 import UsageResultsTable from './UsageResultsTable.vue'
 import type { TimeGranularity, FilterCriteria, LoadingState } from '@/types/analytics'
 import { logGranularityChange } from '@/services/auditLogger'
+import { debounce } from '@/utils/debounce'
 
 // Types
 interface DateRange {
@@ -100,9 +101,16 @@ const handleLoadingChange = (pane: keyof LoadingState, isLoading: boolean) => {
 }
 
 // Methods
+
+// Debounced refresh to prevent rapid successive API calls
+const triggerRefresh = () => {
+  refreshKey.value++
+}
+const debouncedRefresh = debounce(triggerRefresh, 150)
+
 const handleDateRangeChange = (newRange: DateRange) => {
   dateRange.value = newRange
-  refreshKey.value++
+  debouncedRefresh()
 }
 
 // Handle granularity change - sync with filter criteria and refresh all panes
@@ -114,7 +122,7 @@ const handleGranularityChange = (newGranularity: TimeGranularity) => {
   // Log granularity change
   logGranularityChange('ConsumptionPage', newGranularity, previousGranularity)
 
-  refreshKey.value++ // Trigger refresh of all panes
+  debouncedRefresh() // Debounced refresh to prevent rapid clicks
 }
 
 const toggleAskBob = () => {
@@ -139,17 +147,22 @@ const handleFilterUpdate = (newFilters: Partial<FilterCriteria>) => {
   }
 }
 
-// Handle filter apply - refresh all panes
+// Handle filter apply - refresh all panes (debounced)
 const handleFilterApply = () => {
-  refreshKey.value++
+  debouncedRefresh()
 }
 
 // Handle filter clear
 const handleFilterClear = () => {
   filterCriteria.networks = []
   filterCriteria.imsis = []
-  refreshKey.value++
+  debouncedRefresh()
 }
+
+// Cleanup debounced function on unmount
+onUnmounted(() => {
+  debouncedRefresh.cancel()
+})
 
 // Watch for refresh trigger from parent
 watch(() => props.refreshKey, () => {

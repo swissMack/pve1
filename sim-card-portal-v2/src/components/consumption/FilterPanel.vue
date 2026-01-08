@@ -42,8 +42,8 @@ const imsiRangeTo = ref('')
 // Network options with carrier labels
 const networkOptions = ref<Array<{ value: string; label: string }>>([])
 
-// Panel collapsed state
-const isCollapsed = ref(false)
+// Panel collapsed state - start collapsed by default
+const isCollapsed = ref(true)
 
 // IMSI mode options
 const imsiModeOptions = [

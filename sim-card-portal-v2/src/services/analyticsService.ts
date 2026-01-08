@@ -193,7 +193,7 @@ export function translatePeriod(
  * Build API query parameters from FilterCriteria
  */
 export function buildQueryParams(filters: FilterCriteria): Record<string, unknown> {
-  const periodParams = translatePeriod(filters.granularity, filters.dateRange)
+  const periodParams = translatePeriod(filters.granularity || 'monthly', filters.dateRange)
 
   return {
     ...periodParams,

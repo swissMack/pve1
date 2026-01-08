@@ -40,8 +40,6 @@ const loading = ref(true)
 const error = ref<string | null>(null)
 // Internal view mode (used when granularity prop not provided)
 const internalViewMode = ref<'hourly' | 'daily' | 'weekly' | 'monthly'>('monthly')
-// Track when chart is transitioning to disable buttons
-const isTransitioning = ref(false)
 
 // Use external granularity if provided, otherwise use internal state
 const viewMode = computed(() => {
@@ -61,6 +59,11 @@ const viewMode = computed(() => {
 // Determine if external control is active (hide internal toggle)
 const hasExternalGranularity = computed(() => props.granularity !== undefined)
 
+// Handler for view mode button clicks (only used when not externally controlled)
+const handleViewModeClick = (modeId: 'hourly' | 'daily' | 'weekly' | 'monthly') => {
+  internalViewMode.value = modeId
+}
+
 // Emit loading state changes to parent
 watch(loading, (isLoading) => {
   emit('loading', isLoading)
@@ -68,8 +71,6 @@ watch(loading, (isLoading) => {
 
 // Track pending animation frame to cancel on rapid clicks
 let pendingAnimationFrame: number | null = null
-// Version counter to ensure only the latest update executes
-let updateVersion = 0
 
 // View mode options with labels and descriptions
 const viewModes = [
@@ -85,7 +86,17 @@ const currentViewDescription = computed(() => {
   return mode?.description || ''
 })
 
+// Request counter to handle race conditions from rapid clicks
+let fetchRequestId = 0
+
 const fetchTrends = async (isInitial = false) => {
+  // Increment request ID - this fetch will only update chart if it's still the latest
+  const currentRequestId = ++fetchRequestId
+
+  // DON'T destroy the chart here - keep it visible while fetching new data
+  // This prevents blank pane when clicking during animation
+  // Chart will be destroyed only when new data arrives in updateChart()
+
   // Only show loading spinner on initial load, not on view mode changes
   if (isInitial) {
     loading.value = true
@@ -106,6 +117,12 @@ const fetchTrends = async (isInitial = false) => {
     }
 
     const response = await fetch(`/api/consumption/trends?${params}`)
+
+    // Check if this request is still the latest before processing
+    if (currentRequestId !== fetchRequestId) {
+      return // A newer request was started, discard this result
+    }
+
     const result = await response.json()
 
     if (result.success) {
@@ -114,13 +131,19 @@ const fetchTrends = async (isInitial = false) => {
       error.value = result.error || 'Failed to load trends'
     }
   } catch (err) {
-    console.error('Error fetching trends:', err)
-    error.value = 'Network error'
+    // Only set error if this is still the latest request
+    if (currentRequestId === fetchRequestId) {
+      console.error('Error fetching trends:', err)
+      error.value = 'Network error'
+    }
   } finally {
-    loading.value = false
-    await nextTick()
-    if (trends.value.length > 0 && !error.value) {
-      updateChart()
+    // Only update UI if this is still the latest request
+    if (currentRequestId === fetchRequestId) {
+      loading.value = false
+      await nextTick()
+      if (trends.value.length > 0 && !error.value) {
+        updateChart()
+      }
     }
   }
 }
@@ -299,56 +322,20 @@ const destroyChart = () => {
     chartInstance.value.destroy()
     chartInstance.value = null
   }
-
-  // Clear the canvas context to prevent ghost renders
-  if (chartCanvas.value) {
-    const ctx = chartCanvas.value.getContext('2d')
-    if (ctx) {
-      ctx.clearRect(0, 0, chartCanvas.value.width, chartCanvas.value.height)
-    }
-  }
 }
 
-const updateChart = async () => {
-  // Mark as transitioning to disable buttons
-  isTransitioning.value = true
-
-  // Increment version to invalidate any pending updates
-  const currentVersion = ++updateVersion
-
-  // Cancel any pending animation and destroy existing chart
-  destroyChart()
-
-  // Wait for DOM to update
-  await nextTick()
-
-  // Check if this update is still the latest (user might have clicked again)
-  if (currentVersion !== updateVersion) {
+const updateChart = () => {
+  // Check if canvas is available and we have data
+  if (!chartCanvas.value || trends.value.length === 0) {
     return
   }
 
-  // Check if canvas is available and component is still mounted
-  if (!chartCanvas.value) {
-    isTransitioning.value = false
-    return
+  // Chart was already destroyed at fetch start, just create new one
+  // Double-check it's destroyed to be safe
+  if (chartInstance.value) {
+    destroyChart()
   }
-
-  // Use requestAnimationFrame for smooth animation, but track it
-  pendingAnimationFrame = requestAnimationFrame(() => {
-    pendingAnimationFrame = null
-    // Verify this is still the latest version and canvas is available
-    if (currentVersion === updateVersion && chartCanvas.value && trends.value.length > 0) {
-      createChart()
-      // Clear transitioning after animation starts (animation duration is 1000ms)
-      setTimeout(() => {
-        if (currentVersion === updateVersion) {
-          isTransitioning.value = false
-        }
-      }, 1100)
-    } else {
-      isTransitioning.value = false
-    }
-  })
+  createChart()
 }
 
 // Cleanup on component unmount
@@ -393,15 +380,13 @@ watch(() => props.filters, () => {
         <button
           v-for="mode in viewModes"
           :key="mode.id"
-          @click="!isTransitioning && internalViewMode !== mode.id && (internalViewMode = mode.id)"
-          :disabled="isTransitioning"
+          type="button"
+          @click="handleViewModeClick(mode.id)"
           :class="[
             'px-3 py-1.5 text-xs rounded-md transition-colors whitespace-nowrap',
             internalViewMode === mode.id
               ? 'bg-primary text-white'
-              : isTransitioning
-                ? 'text-text-secondary/50 cursor-not-allowed'
-                : 'text-text-secondary hover:text-white cursor-pointer'
+              : 'text-text-secondary hover:text-white cursor-pointer'
           ]"
           :title="mode.description"
         >

@@ -177,7 +177,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="bg-surface-dark rounded-xl border border-border-dark overflow-hidden">
+  <div class="bg-surface-dark rounded-xl border border-border-dark overflow-hidden relative z-0">
     <!-- Header -->
     <div class="px-5 py-4 border-b border-border-dark flex items-center justify-between">
       <div class="flex items-center gap-2">
@@ -188,7 +188,7 @@ onUnmounted(() => {
     </div>
 
     <!-- Map Container -->
-    <div class="h-[300px] relative">
+    <div class="h-[300px] relative z-0 isolate">
       <div v-if="loading" class="absolute inset-0 flex items-center justify-center bg-background-dark">
         <div class="animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent"></div>
       </div>
@@ -232,5 +232,19 @@ onUnmounted(() => {
 
 .dark-popup .leaflet-popup-close-button:hover {
   color: #f3f4f6;
+}
+
+/* Ensure Leaflet stays within its container */
+.leaflet-container {
+  z-index: 0 !important;
+}
+
+.leaflet-pane {
+  z-index: 0 !important;
+}
+
+.leaflet-top,
+.leaflet-bottom {
+  z-index: 1 !important;
 }
 </style>

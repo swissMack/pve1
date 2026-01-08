@@ -39,9 +39,8 @@ const refreshKey = ref(0)
 // Unified filter state for all panes
 const granularity = ref<TimeGranularity>('monthly')
 
-// Filter criteria combining granularity and other filters (for US2)
+// Filter criteria for network/IMSI filters only (granularity is passed separately)
 const filterCriteria = reactive<FilterCriteria>({
-  granularity: 'monthly',
   networks: [],
   imsis: []
 })
@@ -113,16 +112,17 @@ const handleDateRangeChange = (newRange: DateRange) => {
   debouncedRefresh()
 }
 
-// Handle granularity change - sync with filter criteria and refresh all panes
+// Handle granularity change - update granularity ref only
+// Components react via their granularity prop watcher - no need to refresh or update filterCriteria
 const handleGranularityChange = (newGranularity: TimeGranularity) => {
   const previousGranularity = granularity.value
   granularity.value = newGranularity
-  filterCriteria.granularity = newGranularity
+  // NOTE: Don't update filterCriteria.granularity - it causes double fetches
+  // because components watch both props.granularity AND props.filters
+  // Don't call debouncedRefresh - components already react to granularity changes
 
   // Log granularity change
   logGranularityChange('ConsumptionPage', newGranularity, previousGranularity)
-
-  debouncedRefresh() // Debounced refresh to prevent rapid clicks
 }
 
 const toggleAskBob = () => {
@@ -174,9 +174,9 @@ onMounted(fetchFilterOptions)
 </script>
 
 <template>
-  <div class="min-h-full bg-background-dark">
+  <div class="min-h-full bg-background-dark relative">
     <!-- Header with Date Range and Actions -->
-    <div class="px-6 py-4 border-b border-border-dark bg-surface-dark sticky top-0 z-10">
+    <div class="px-6 py-4 border-b border-border-dark bg-surface-dark sticky top-0 z-50">
       <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
           <h1 class="text-xl font-bold text-white flex items-center gap-2">

@@ -23,6 +23,7 @@ import { randomUUID } from 'crypto'
 import { spawn } from 'child_process'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
+import { existsSync } from 'fs'
 
 // Import Provisioning API v1 router
 import { createV1Router } from '../dist/api/api/v1/index.js'
@@ -815,6 +816,74 @@ app.post('/api/settings/refresh-rates', async (req, res) => {
 })
 
 // ============================================================
+// MCCMNC LOOKUP API
+// ============================================================
+
+// Common carriers for MCCMNC lookup (server-side fallback)
+const MCCMNC_CARRIERS = {
+  '22288': { mccmnc: '22288', carrierName: 'TIM Italy', countryCode: 'IT', networkType: 'GSM' },
+  '22210': { mccmnc: '22210', carrierName: 'Vodafone Italy', countryCode: 'IT', networkType: 'GSM' },
+  '22201': { mccmnc: '22201', carrierName: 'TIM Italy', countryCode: 'IT', networkType: 'GSM' },
+  '22299': { mccmnc: '22299', carrierName: 'Tre Italy', countryCode: 'IT', networkType: 'GSM' },
+  '26201': { mccmnc: '26201', carrierName: 'T-Mobile Germany', countryCode: 'DE', networkType: 'GSM' },
+  '26202': { mccmnc: '26202', carrierName: 'Vodafone Germany', countryCode: 'DE', networkType: 'GSM' },
+  '26203': { mccmnc: '26203', carrierName: 'O2 Germany', countryCode: 'DE', networkType: 'GSM' },
+  '23410': { mccmnc: '23410', carrierName: 'O2 UK', countryCode: 'GB', networkType: 'GSM' },
+  '23415': { mccmnc: '23415', carrierName: 'Vodafone UK', countryCode: 'GB', networkType: 'GSM' },
+  '23420': { mccmnc: '23420', carrierName: 'Three UK', countryCode: 'GB', networkType: 'GSM' },
+  '23430': { mccmnc: '23430', carrierName: 'EE UK', countryCode: 'GB', networkType: 'GSM' },
+  '20801': { mccmnc: '20801', carrierName: 'Orange France', countryCode: 'FR', networkType: 'GSM' },
+  '20810': { mccmnc: '20810', carrierName: 'SFR France', countryCode: 'FR', networkType: 'GSM' },
+  '20820': { mccmnc: '20820', carrierName: 'Bouygues France', countryCode: 'FR', networkType: 'GSM' },
+  '31026': { mccmnc: '31026', carrierName: 'T-Mobile US', countryCode: 'US', networkType: 'GSM' },
+  '310260': { mccmnc: '310260', carrierName: 'T-Mobile US', countryCode: 'US', networkType: 'LTE' },
+  '311480': { mccmnc: '311480', carrierName: 'Verizon US', countryCode: 'US', networkType: 'LTE' },
+  '310410': { mccmnc: '310410', carrierName: 'AT&T US', countryCode: 'US', networkType: 'GSM' },
+  '22803': { mccmnc: '22803', carrierName: 'Swisscom', countryCode: 'CH', networkType: 'GSM' },
+  '22801': { mccmnc: '22801', carrierName: 'Swisscom', countryCode: 'CH', networkType: 'GSM' },
+  '22802': { mccmnc: '22802', carrierName: 'Sunrise', countryCode: 'CH', networkType: 'GSM' },
+  '22806': { mccmnc: '22806', carrierName: 'Salt', countryCode: 'CH', networkType: 'GSM' }
+}
+
+// GET /api/mccmnc/lookup - Lookup carrier names by MCCMNC codes
+app.get('/api/mccmnc/lookup', async (req, res) => {
+  try {
+    // Get codes from query params (can be array or single value)
+    const codesParam = req.query.codes
+    let codes = []
+
+    if (Array.isArray(codesParam)) {
+      codes = codesParam
+    } else if (typeof codesParam === 'string') {
+      codes = [codesParam]
+    }
+
+    if (codes.length === 0) {
+      return res.json({ success: true, data: [] })
+    }
+
+    // Lookup each code
+    const data = codes.map(code => {
+      if (MCCMNC_CARRIERS[code]) {
+        return MCCMNC_CARRIERS[code]
+      }
+      // Return generic fallback for unknown codes
+      return {
+        mccmnc: code,
+        carrierName: `Network ${code}`,
+        countryCode: code.substring(0, 3),
+        networkType: 'Unknown'
+      }
+    })
+
+    res.json({ success: true, data })
+  } catch (error) {
+    console.error('Error looking up MCCMNC codes:', error)
+    res.status(500).json({ success: false, error: 'Failed to lookup MCCMNC codes' })
+  }
+})
+
+// ============================================================
 // CONSUMPTION DASHBOARD API
 // ============================================================
 
@@ -1192,12 +1261,22 @@ app.get('/api/consumption/trends', async (req, res) => {
     const displayCurrency = await getDisplayCurrency()
     const rate = await getExchangeRate(displayCurrency)
 
-    let trends = result.rows.map(row => ({
-      period: String(row.period),
-      dataUsageGB: parseFloat(row.total_data_bytes) / (1024 * 1024 * 1024),
-      cost: parseFloat(row.total_cost) * rate,
-      simCount: parseInt(row.active_sim_count)
-    }))
+    let trends = result.rows.map(row => {
+      // Format period as ISO string if it's a Date
+      let periodStr = row.period
+      if (row.period instanceof Date) {
+        periodStr = row.period.toISOString().split('T')[0]
+      } else if (typeof row.period === 'string' && row.period.includes('GMT')) {
+        // Handle stringified date
+        periodStr = new Date(row.period).toISOString().split('T')[0]
+      }
+      return {
+        period: periodStr,
+        dataUsageGB: parseFloat(row.total_data_bytes) / (1024 * 1024 * 1024),
+        cost: parseFloat(row.total_cost) * rate,
+        simCount: parseInt(row.active_sim_count)
+      }
+    })
 
     // For hourly, generate synthetic hourly data from daily
     if (granularity === 'hourly') {
@@ -1362,6 +1441,113 @@ app.get('/api/consumption/regional', async (req, res) => {
     res.json({ success: true, data: regional })
   } catch (error) {
     console.error('Error fetching regional data:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// GET /api/consumption/usage-details - Get detailed usage per carrier
+app.get('/api/consumption/usage-details', async (req, res) => {
+  try {
+    const { start_date, end_date, granularity = 'daily' } = req.query
+    const mccmncFilter = req.query.mccmnc
+
+    const now = new Date()
+    const startDate = start_date || new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
+    const endDate = end_date || now.toISOString().split('T')[0]
+
+    // Query aggregated by carrier_id and date
+    let query = `
+      SELECT
+        carrier_id,
+        SUM(data_bytes) as bytes,
+        DATE(usage_date) as day,
+        MAX(created_at) as latest_event_at
+      FROM ${SCHEMA}daily_usage
+      WHERE usage_date >= $1 AND usage_date <= $2
+    `
+    const queryParams = [startDate, endDate]
+    let paramIndex = 3
+
+    // Add carrier filter if provided
+    if (mccmncFilter) {
+      const mccmncs = Array.isArray(mccmncFilter) ? mccmncFilter : [mccmncFilter]
+      query += ` AND carrier_id = ANY($${paramIndex})`
+      queryParams.push(mccmncs)
+      paramIndex++
+    }
+
+    query += `
+      GROUP BY carrier_id, DATE(usage_date)
+      ORDER BY latest_event_at DESC
+      LIMIT 500
+    `
+
+    const result = await pool.query(query, queryParams)
+
+    // Generate synthetic IMSI data for each carrier row
+    const sampleImsis = ['89410123456789012345', '89410234567890123456', '89410345678901234567']
+    const data = result.rows.map((row, idx) => ({
+      imsi: sampleImsis[idx % sampleImsis.length],
+      mccmnc: row.carrier_id || 'unknown',
+      bytes: parseInt(row.bytes) || 0,
+      day: row.day ? row.day.toISOString().split('T')[0] : null,
+      latestEventAt: row.latest_event_at ? row.latest_event_at.toISOString() : new Date().toISOString()
+    }))
+
+    res.json({ success: true, data })
+  } catch (error) {
+    console.error('Error fetching usage details:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// GET /api/consumption/carrier-locations - Get carrier location data for map
+app.get('/api/consumption/carrier-locations', async (req, res) => {
+  try {
+    // Return carrier headquarters locations for map display
+    // These are approximate coordinates for major carrier regions
+    const carrierLocations = [
+      { mccmnc: '22288', lat: 41.9028, lng: 12.4964, countryCode: 'IT', carrierName: 'TIM Italy' },
+      { mccmnc: '22210', lat: 45.4642, lng: 9.1900, countryCode: 'IT', carrierName: 'Vodafone Italy' },
+      { mccmnc: '22201', lat: 41.9028, lng: 12.4964, countryCode: 'IT', carrierName: 'TIM Italy' },
+      { mccmnc: '22299', lat: 45.0703, lng: 7.6869, countryCode: 'IT', carrierName: 'Tre Italy' },
+      { mccmnc: '26201', lat: 50.1109, lng: 8.6821, countryCode: 'DE', carrierName: 'T-Mobile Germany' },
+      { mccmnc: '26202', lat: 51.2277, lng: 6.7735, countryCode: 'DE', carrierName: 'Vodafone Germany' },
+      { mccmnc: '26203', lat: 48.1351, lng: 11.5820, countryCode: 'DE', carrierName: 'O2 Germany' },
+      { mccmnc: '23410', lat: 51.5074, lng: -0.1278, countryCode: 'GB', carrierName: 'O2 UK' },
+      { mccmnc: '23415', lat: 51.5225, lng: -0.0897, countryCode: 'GB', carrierName: 'Vodafone UK' },
+      { mccmnc: '23420', lat: 51.5074, lng: -0.1278, countryCode: 'GB', carrierName: 'Three UK' },
+      { mccmnc: '23430', lat: 51.5074, lng: -0.1278, countryCode: 'GB', carrierName: 'EE UK' },
+      { mccmnc: '20801', lat: 48.8566, lng: 2.3522, countryCode: 'FR', carrierName: 'Orange France' },
+      { mccmnc: '20810', lat: 48.8566, lng: 2.3522, countryCode: 'FR', carrierName: 'SFR France' },
+      { mccmnc: '20820', lat: 48.8566, lng: 2.3522, countryCode: 'FR', carrierName: 'Bouygues France' },
+      { mccmnc: '22803', lat: 46.9480, lng: 7.4474, countryCode: 'CH', carrierName: 'Swisscom' },
+      { mccmnc: '22801', lat: 46.9480, lng: 7.4474, countryCode: 'CH', carrierName: 'Swisscom' },
+      { mccmnc: '22802', lat: 47.3769, lng: 8.5417, countryCode: 'CH', carrierName: 'Sunrise' },
+      { mccmnc: '22806', lat: 46.5197, lng: 6.6323, countryCode: 'CH', carrierName: 'Salt' }
+    ]
+
+    res.json({ success: true, data: carrierLocations })
+  } catch (error) {
+    console.error('Error fetching carrier locations:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// GET /api/consumption/unique-imsis - Get list of unique IMSIs (sample data for Supabase)
+app.get('/api/consumption/unique-imsis', async (req, res) => {
+  try {
+    // Return sample IMSI data since Supabase schema doesn't have individual IMSI tracking
+    const sampleImsis = [
+      { imsi: '89410123456789012345' },
+      { imsi: '89410234567890123456' },
+      { imsi: '89410345678901234567' },
+      { imsi: '89410456789012345678' },
+      { imsi: '89410567890123456789' }
+    ]
+    res.json({ success: true, data: sampleImsis })
+  } catch (error) {
+    console.error('Error fetching unique IMSIs:', error)
     res.status(500).json({ success: false, error: 'Database error' })
   }
 })
@@ -2099,6 +2285,13 @@ app.get('/api/llm/pending-actions', async (req, res) => {
 // Start MQTT Bridge as child process
 function startMqttBridge() {
   const mqttBridgePath = join(__dirname, '..', 'services', 'mqtt-bridge', 'index.js')
+  const mqttBridgeDir = join(__dirname, '..', 'services', 'mqtt-bridge')
+
+  // Check if MQTT bridge directory exists (skip in Docker/production)
+  if (!existsSync(mqttBridgeDir)) {
+    console.log('\n[MQTT Bridge] Skipped - mqtt-bridge directory not found (production mode)')
+    return
+  }
 
   console.log('\n[MQTT Bridge] Starting MQTT Bridge service...')
 

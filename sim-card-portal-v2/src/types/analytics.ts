@@ -76,8 +76,8 @@ export interface ImsiRange {
  * User-selected filter parameters for consumption queries
  */
 export interface FilterCriteria {
-  /** Time granularity selection */
-  granularity: TimeGranularity
+  /** Time granularity selection (optional when passed separately as prop) */
+  granularity?: TimeGranularity
   /** Custom date range (optional, defaults to current period) */
   dateRange?: {
     start: Date

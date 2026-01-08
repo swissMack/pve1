@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import type { TimeGranularity } from '@/types/analytics'
 
 interface Props {
@@ -29,9 +29,17 @@ const currentViewDescription = computed(() => {
   return mode?.description || ''
 })
 
+// Debounce flag to prevent rapid clicks
+const isProcessing = ref(false)
+
 const selectMode = (mode: TimeGranularity) => {
-  if (!props.disabled && props.modelValue !== mode) {
+  if (!props.disabled && props.modelValue !== mode && !isProcessing.value) {
+    isProcessing.value = true
     emit('update:modelValue', mode)
+    // Allow next click after 500ms - balances responsiveness with preventing excessive API calls
+    setTimeout(() => {
+      isProcessing.value = false
+    }, 500)
   }
 }
 </script>
@@ -47,6 +55,7 @@ const selectMode = (mode: TimeGranularity) => {
       <button
         v-for="mode in viewModes"
         :key="mode.id"
+        type="button"
         @click="selectMode(mode.id)"
         :disabled="disabled"
         :aria-pressed="modelValue === mode.id"

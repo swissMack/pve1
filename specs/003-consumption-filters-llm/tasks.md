@@ -83,9 +83,9 @@ Based on plan.md structure:
 
 ### Implementation for User Story 2
 
-- [x] T021 [US2] Create FilterPanel.vue component in `sim-card-portal-v2/src/components/consumption/FilterPanel.vue` with collapsible panel UI
+- [x] T021 [US2] Create FilterPanel.vue component in `sim-card-portal-v2/src/components/consumption/FilterPanel.vue` with collapsible panel UI, including Start/End date pickers for IMSI-specific date ranges
 - [x] T022 [US2] Add MCCMNC MultiSelect field to FilterPanel with carrier name labels fetched via mccmncService
-- [x] T023 [US2] Add IMSI search/autocomplete MultiSelect field to FilterPanel
+- [x] T023 [US2] Add IMSI filter with three input modes: Single (one IMSI input), Multiple (add/remove rows), and Range (from/to IMSI inputs)
 - [x] T024 [US2] Integrate FilterPanel with ConsumptionPage.vue filter state (networks[], imsis[])
 - [x] T025 [US2] Update analyticsService calls to include mccmnc[] and imsi[] filter parameters
 - [x] T026 [US2] Add "Apply Filters" and "Clear Filters" buttons to FilterPanel
@@ -148,6 +148,8 @@ Based on plan.md structure:
 - [x] T048 [P] Verify filter state behavior across page interactions
 - [x] T049 [P] Add accessibility attributes to new filter controls (aria-labels, aria-expanded, keyboard navigation)
 - [x] T050 Final build verification and type checking
+- [x] T053 [P] Add global dark theme CSS for PrimeVue MultiSelect overlay panel in `sim-card-portal-v2/src/style.css` (portal-rendered dropdowns require global styles)
+- [x] T054 [P] Add cost disclaimer footer to ConsumptionTrendsChart: "Costs do not include Access Charges"
 - [ ] T051 [DEFERRED] Add structured logging for filter changes and API calls (audit trail)
 - [ ] T052 [DEFERRED] Performance optimization: debounce filter changes, optimize cache key generation
 
@@ -217,17 +219,23 @@ Based on plan.md structure:
 - Commit after each task or logical group
 - Stop at any checkpoint to validate story independently
 
-## Completion Summary (2025-01-07)
+## Completion Summary (2025-01-08)
 
 | Phase | Status | Notes |
 |-------|--------|-------|
 | Phase 1: Setup | ✅ Complete | T001-T003 |
 | Phase 2: Foundational | ✅ Complete | T004-T012 |
 | Phase 3: US1 Time Filtering | ✅ Complete | T013-T019 (T020 deferred) |
-| Phase 4: US2 Filter Fields | ✅ Complete | T021-T029 |
+| Phase 4: US2 Filter Fields | ✅ Complete | T021-T029, enhanced with date pickers & IMSI modes |
 | Phase 5: US3 Usage Table | ✅ Complete | T030-T037 |
 | Phase 6: US4 AskBob LLM | ✅ Complete | T038-T045 |
-| Phase 7: Polish | ✅ Complete | T046-T050 (T051-T052 deferred) |
+| Phase 7: Polish | ✅ Complete | T046-T050, T053-T054 (T051-T052 deferred) |
+
+**Post-Implementation Enhancements (2025-01-08)**:
+- T021 expanded: Added Start/End date pickers to FilterPanel for IMSI-specific date ranges
+- T023 expanded: IMSI filter now supports three modes (Single, Multiple with add/remove rows, Range)
+- T053 added: Global dark theme CSS for PrimeVue MultiSelect overlay (fixes portal rendering)
+- T054 added: Cost disclaimer footer in ConsumptionTrendsChart
 
 **Deferred Items**:
 - T020: Custom date range + granularity integration

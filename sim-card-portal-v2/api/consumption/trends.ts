@@ -175,7 +175,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try {
       const response = await fetch(analyticsUrl, { method: 'GET', headers })
       if (response.ok) {
-        analyticsData = await response.json()
+        analyticsData = await response.json() as typeof analyticsData
       }
     } catch (fetchError) {
       console.warn('Analytics API not available, using simulated data')

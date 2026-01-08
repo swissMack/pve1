@@ -12,6 +12,7 @@ import TimeGranularityToggle from './TimeGranularityToggle.vue'
 import FilterPanel from './FilterPanel.vue'
 import UsageResultsTable from './UsageResultsTable.vue'
 import type { TimeGranularity, FilterCriteria, LoadingState } from '@/types/analytics'
+import { logGranularityChange } from '@/services/auditLogger'
 
 // Types
 interface DateRange {
@@ -106,8 +107,13 @@ const handleDateRangeChange = (newRange: DateRange) => {
 
 // Handle granularity change - sync with filter criteria and refresh all panes
 const handleGranularityChange = (newGranularity: TimeGranularity) => {
+  const previousGranularity = granularity.value
   granularity.value = newGranularity
   filterCriteria.granularity = newGranularity
+
+  // Log granularity change
+  logGranularityChange('ConsumptionPage', newGranularity, previousGranularity)
+
   refreshKey.value++ // Trigger refresh of all panes
 }
 

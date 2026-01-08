@@ -2,6 +2,7 @@
 import { ref, nextTick, computed } from 'vue'
 import { Chart, registerables } from 'chart.js'
 import { useAppSettings } from '../../composables/useAppSettings'
+import { logAskBobQuery } from '@/services/auditLogger'
 
 Chart.register(...registerables)
 
@@ -112,6 +113,9 @@ const sendMessage = async () => {
       }
 
       messages.value.push(assistantMessage)
+
+      // Log successful AskBob query
+      logAskBobQuery(query, result.data.type || 'text')
 
       await scrollToBottom()
 

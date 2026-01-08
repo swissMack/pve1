@@ -7,6 +7,7 @@ import InputText from 'primevue/inputtext'
 import type { FilterCriteria, UsageTableRow, TimeGranularity } from '@/types/analytics'
 import { formatMccmncLabel, lookupMccmnc } from '@/services/mccmncService'
 import { formatBytes } from '@/services/analyticsService'
+import { logExportCsv } from '@/services/auditLogger'
 
 interface DateRange {
   start: string
@@ -144,6 +145,9 @@ const exportCSV = () => {
   link.download = `usage-data-${props.dateRange.start}-to-${props.dateRange.end}.csv`
   link.click()
   URL.revokeObjectURL(url)
+
+  // Log CSV export
+  logExportCsv('UsageResultsTable', filteredData.value.length, props.filters)
 }
 
 // Format date for display

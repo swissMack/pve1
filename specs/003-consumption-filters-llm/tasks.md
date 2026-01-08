@@ -150,7 +150,7 @@ Based on plan.md structure:
 - [x] T050 Final build verification and type checking
 - [x] T053 [P] Add global dark theme CSS for PrimeVue MultiSelect overlay panel in `sim-card-portal-v2/src/style.css` (portal-rendered dropdowns require global styles)
 - [x] T054 [P] Add cost disclaimer footer to ConsumptionTrendsChart: "Costs do not include Access Charges"
-- [ ] T051 [DEFERRED] Add structured logging for filter changes and API calls (audit trail)
+- [x] T051 Add structured logging for filter changes and API calls (audit trail) via auditLogger service
 - [ ] T052 [DEFERRED] Performance optimization: debounce filter changes, optimize cache key generation
 
 ---
@@ -229,15 +229,15 @@ Based on plan.md structure:
 | Phase 4: US2 Filter Fields | ✅ Complete | T021-T029, enhanced with date pickers & IMSI modes |
 | Phase 5: US3 Usage Table | ✅ Complete | T030-T037 |
 | Phase 6: US4 AskBob LLM | ✅ Complete | T038-T045 |
-| Phase 7: Polish | ✅ Complete | T046-T050, T053-T054 (T051-T052 deferred) |
+| Phase 7: Polish | ✅ Complete | T046-T054 (T052 deferred) |
 
 **Post-Implementation Enhancements (2025-01-08)**:
 - T020 completed: Date range picker integration via FilterPanel (was originally deferred)
 - T021 expanded: Added Start/End date pickers to FilterPanel for IMSI-specific date ranges
 - T023 expanded: IMSI filter now supports three modes (Single, Multiple with add/remove rows, Range)
+- T051 completed: Structured audit logging via auditLogger service (filter changes, API calls, exports, AskBob queries)
 - T053 added: Global dark theme CSS for PrimeVue MultiSelect overlay (fixes portal rendering)
 - T054 added: Cost disclaimer footer in ConsumptionTrendsChart
 
 **Deferred Items**:
-- T051: Structured logging for audit trail
 - T052: Performance optimization (debounce, cache optimization)

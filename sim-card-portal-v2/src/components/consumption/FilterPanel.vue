@@ -6,6 +6,7 @@ import InputText from 'primevue/inputtext'
 import Button from 'primevue/button'
 import type { FilterCriteria, NetworkMapping, ImsiFilterMode, ImsiRange } from '@/types/analytics'
 import { formatMccmncLabel, getAllCachedMappings, lookupMccmnc } from '@/services/mccmncService'
+import { logFilterApply, logFilterClear } from '@/services/auditLogger'
 
 interface Props {
   modelValue: Partial<FilterCriteria>
@@ -159,6 +160,7 @@ const isValidRange = computed(() => {
 
 // Apply filters
 const applyFilters = () => {
+  const previousFilters = { ...props.modelValue }
   const updatedFilters: Partial<FilterCriteria> = {
     ...props.modelValue,
     networks: [...selectedNetworks.value],
@@ -177,12 +179,17 @@ const applyFilters = () => {
     updatedFilters.dateRange = undefined
   }
 
+  // Log filter application
+  logFilterApply('FilterPanel', updatedFilters, previousFilters)
+
   emit('update:modelValue', updatedFilters)
   emit('apply')
 }
 
 // Clear filters
 const clearFilters = () => {
+  const previousFilters = { ...props.modelValue }
+
   selectedNetworks.value = []
   startDate.value = null
   endDate.value = null
@@ -191,6 +198,9 @@ const clearFilters = () => {
   multipleImsis.value = ['']
   imsiRangeFrom.value = ''
   imsiRangeTo.value = ''
+
+  // Log filter clear
+  logFilterClear('FilterPanel', previousFilters)
 
   emit('update:modelValue', {
     ...props.modelValue,

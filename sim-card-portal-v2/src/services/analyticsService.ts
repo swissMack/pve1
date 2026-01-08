@@ -17,6 +17,7 @@ import type {
   TimeGranularity,
   FilterCriteria
 } from '@/types/analytics'
+import { startApiCall, logApiSuccess, logApiError } from '@/services/auditLogger'
 
 // ============================================================================
 // Configuration
@@ -181,6 +182,7 @@ async function fetchWithFallback<T>(
   params: Record<string, unknown> = {}
 ): Promise<{ data: T; cached: boolean }> {
   const cacheKey = buildCacheKey(endpoint, params)
+  const apiContext = startApiCall(endpoint, params)
 
   // Build query string
   const queryParams = new URLSearchParams()
@@ -215,6 +217,8 @@ async function fetchWithFallback<T>(
     if (result.success && result.data) {
       // Cache successful response
       setCache(cacheKey, result.data)
+      const dataArray = Array.isArray(result.data) ? result.data : [result.data]
+      logApiSuccess(apiContext, dataArray.length, false)
       return { data: result.data, cached: false }
     }
 
@@ -224,10 +228,13 @@ async function fetchWithFallback<T>(
     const cached = getFromCache<T>(cacheKey)
     if (cached) {
       console.warn('Using cached data due to API error:', error)
+      const cachedArray = Array.isArray(cached) ? cached : [cached]
+      logApiSuccess(apiContext, cachedArray.length, true)
       return { data: cached, cached: true }
     }
 
     // Tier 3: Propagate error
+    logApiError(apiContext, error instanceof Error ? error : new Error(String(error)))
     throw new AnalyticsAPIError(
       'Data temporarily unavailable',
       error instanceof Error ? error : new Error(String(error))

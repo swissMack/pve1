@@ -488,6 +488,202 @@ The system uses two separate database tables for SIM management, each serving a 
 
 The database trigger `sync_provisioned_to_sim_cards` automatically syncs changes from `provisioned_sims` to `sim_cards`, ensuring the SIM Management page always reflects the current state.
 
+### CDR / Usage Data Flow
+
+This diagram shows how Call Detail Records (CDRs) / usage records flow from external mediation systems through the SIM Card Portal to the UI.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                    CDR DATA FLOW THROUGH SIM CARD PORTAL                         │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+                           EXTERNAL SOURCES
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                                                                                  │
+│   ┌─────────────────────┐      ┌─────────────────────┐      ┌────────────────┐  │
+│   │ Mediation Simulator │      │  Real Mediation     │      │  Other Systems │  │
+│   │ (mqtt-control-panel)│      │  Systems (3rd Party)│      │  (CSV Import)  │  │
+│   └──────────┬──────────┘      └──────────┬──────────┘      └───────┬────────┘  │
+│              │                            │                         │           │
+└──────────────┼────────────────────────────┼─────────────────────────┼───────────┘
+               │                            │                         │
+               ▼                            ▼                         ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                              API INGESTION LAYER                                 │
+│  ┌──────────────────────────────────────────────────────────────────────────┐   │
+│  │                         POST /api/v1/usage/batch                          │   │
+│  │                         POST /api/v1/usage (single)                       │   │
+│  │                                                                           │   │
+│  │  • Validates API key (Bearer token or X-API-Key header)                  │   │
+│  │  • Validates record schema (iccid, recordId, periodStart, periodEnd)     │   │
+│  │  • Checks for duplicates via recordId (idempotency)                      │   │
+│  │  • Returns: ACCEPTED / DUPLICATE / ERROR per record                      │   │
+│  └──────────────────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────────┘
+                                        │
+                                        ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                           PRIMARY STORAGE (RAW CDRs)                            │
+│  ┌──────────────────────────────────────────────────────────────────────────┐   │
+│  │                         TABLE: usage_records                              │   │
+│  │  ┌─────────────────────────────────────────────────────────────────────┐ │   │
+│  │  │ id | iccid | record_id | period_start | period_end | total_bytes | │ │   │
+│  │  │ data_upload_bytes | data_download_bytes | sms_count | source |     │ │   │
+│  │  │ created_at | processed | tenant | customer                          │ │   │
+│  │  └─────────────────────────────────────────────────────────────────────┘ │   │
+│  │                                                                           │   │
+│  │  • Raw CDR records as received from mediation                            │   │
+│  │  • Immutable audit trail                                                  │   │
+│  │  • processed = false initially                                           │   │
+│  └──────────────────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────────┘
+                                        │
+                         ┌──────────────┴──────────────┐
+                         ▼                              ▼
+┌──────────────────────────────────────┐  ┌────────────────────────────────────────┐
+│      AGGREGATION JOB (5 min)         │  │         CYCLE MANAGEMENT                │
+│  ┌────────────────────────────────┐  │  │  ┌────────────────────────────────────┐│
+│  │  • Runs every 5 minutes        │  │  │  │        TABLE: usage_cycles         ││
+│  │  • Groups by ICCID + date      │  │  │  │  ┌──────────────────────────────┐  ││
+│  │  • Sums bytes and SMS counts   │  │  │  │  │ id | iccid | cycle_start |   │  ││
+│  │  • Marks records as processed  │  │  │  │  │ cycle_end | data_limit |     │  ││
+│  │  • Updates daily_usage table   │  │  │  │  │ sms_limit | status |         │  ││
+│  │  • Handles late-arriving CDRs  │  │  │  │  │ created_at                    │  ││
+│  └────────────────────────────────┘  │  │  │  └──────────────────────────────┘  ││
+└──────────────────────────────────────┘  │  │                                      │
+                         │                 │  │  • Defines billing periods           │
+                         ▼                 │  │  • Tracks usage limits               │
+┌──────────────────────────────────────┐  │  │  • Reset via POST /usage/reset       │
+│       DAILY AGGREGATED STORAGE       │  │  └────────────────────────────────────┘│
+│  ┌────────────────────────────────┐  │  └────────────────────────────────────────┘
+│  │      TABLE: daily_usage        │  │
+│  │  ┌──────────────────────────┐  │  │
+│  │  │ id | iccid | date |      │  │  │
+│  │  │ total_bytes |            │  │  │
+│  │  │ upload_bytes |           │  │  │
+│  │  │ download_bytes |         │  │  │
+│  │  │ sms_count | tenant |     │  │  │
+│  │  │ customer | updated_at    │  │  │
+│  │  └──────────────────────────┘  │  │
+│  │                                │  │
+│  │  • Pre-aggregated for fast    │  │
+│  │    queries                    │  │
+│  │  • One row per ICCID per day  │  │
+│  │  • Updates on each agg run    │  │
+│  └────────────────────────────────┘  │
+└──────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                            ANALYTICS API LAYER                                   │
+│  ┌──────────────────────────────────────────────────────────────────────────┐   │
+│  │  GET /analytics/imsi              → Usage per IMSI                        │   │
+│  │  GET /analytics/imsi/network      → Usage per IMSI per network (MCCMNC)   │   │
+│  │  GET /analytics/customer/network  → Usage per customer per network        │   │
+│  │  GET /analytics/tenant/network    → Usage per tenant per network          │   │
+│  │  GET /analytics/unique/imsi/count → Unique IMSI counts                    │   │
+│  │                                                                            │   │
+│  │  Query Parameters: tenant, customer, imsi[], mccmnc[], period, periodEnd  │   │
+│  └──────────────────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────────┘
+                                        │
+                                        ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                          SIM CARD PORTAL UI                                      │
+│  ┌──────────────────────────────────────────────────────────────────────────┐   │
+│  │                         CONSUMPTION PAGE                                  │   │
+│  │  ┌────────────────────────────────────────────────────────────────────┐  │   │
+│  │  │  FILTERS (top bar)                                                  │  │   │
+│  │  │  • Period: Today / Week / Month / Quarter / Custom range            │  │   │
+│  │  │  • Network: MCCMNC multi-select                                     │  │   │
+│  │  │  • IMSI: Include/Exclude mode with chip input                       │  │   │
+│  │  │  • Granularity: Daily / Weekly / Monthly                            │  │   │
+│  │  └────────────────────────────────────────────────────────────────────┘  │   │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │   │
+│  │  │    KPI 1     │  │    KPI 2     │  │    KPI 3     │  │    KPI 4     │  │   │
+│  │  │  Total Data  │  │  Upload Data │  │ Download Data│  │  SMS Count   │  │   │
+│  │  │   125.3 GB   │  │   37.6 GB    │  │   87.7 GB    │  │    12,450    │  │   │
+│  │  └──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘  │   │
+│  │  ┌────────────────────────────────────────────────────────────────────┐  │   │
+│  │  │                     CONSUMPTION CHART                               │  │   │
+│  │  │     ▲                                                               │  │   │
+│  │  │     │    ╭──╮                    ╭──╮                               │  │   │
+│  │  │     │   ╭╯  ╰╮    ╭──╮          ╭╯  ╰╮                              │  │   │
+│  │  │     │  ╭╯    ╰╮  ╭╯  ╰╮   ╭──╮ ╭╯    ╰╮                             │  │   │
+│  │  │     │ ╭╯      ╰──╯    ╰──╯╭╯ ╰╯╯      ╰──                           │  │   │
+│  │  │     └─┴─────────────────────────────────────────────────────►       │  │   │
+│  │  │       Jan 2   Jan 3   Jan 4   Jan 5   Jan 6                         │  │   │
+│  │  └────────────────────────────────────────────────────────────────────┘  │   │
+│  │  ┌────────────────────────────────────────────────────────────────────┐  │   │
+│  │  │                   USAGE RESULTS TABLE                               │  │   │
+│  │  │  ┌────────┬──────────┬───────────┬───────────┬────────┬─────────┐  │  │   │
+│  │  │  │  IMSI  │  Network │ Total (MB)│ Upload    │Download│   SMS   │  │  │   │
+│  │  │  ├────────┼──────────┼───────────┼───────────┼────────┼─────────┤  │  │   │
+│  │  │  │222880..│  22288   │   524.3   │  157.3    │  367.0 │    45   │  │  │   │
+│  │  │  │222881..│  22288   │   312.7   │   93.8    │  218.9 │    23   │  │  │   │
+│  │  │  │310260..│  31026   │   189.4   │   56.8    │  132.6 │    12   │  │  │   │
+│  │  │  └────────┴──────────┴───────────┴───────────┴────────┴─────────┘  │  │   │
+│  │  └────────────────────────────────────────────────────────────────────┘  │   │
+│  └──────────────────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                              AUDIT & MONITORING                                  │
+│  ┌──────────────────────────────────────────────────────────────────────────┐   │
+│  │                        TABLE: audit_log                                   │   │
+│  │  • Records all API calls with timestamps                                  │   │
+│  │  • Tracks source system, API key used                                     │   │
+│  │  • Stores request/response for debugging                                  │   │
+│  │                                                                           │   │
+│  │  Viewable in: Settings → Audit Log                                        │   │
+│  └──────────────────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### CDR Timing Summary
+
+| Stage | Latency | Notes |
+|-------|---------|-------|
+| API Ingestion | ~50-200ms | Per batch of 1000 records |
+| Raw Storage | Immediate | Written during ingestion |
+| Aggregation | Every 5 minutes | Background job |
+| Analytics Query | ~100-500ms | Depends on date range |
+| UI Refresh | On-demand | User-triggered |
+
+#### Usage Record Schema
+
+Records submitted to `POST /api/v1/usage` or `POST /api/v1/usage/batch`:
+
+```json
+{
+  "iccid": "89011234567890123456",
+  "recordId": "rec_1736438400_001",
+  "periodStart": "2025-01-09T00:00:00Z",
+  "periodEnd": "2025-01-09T23:59:59Z",
+  "usage": {
+    "totalBytes": 52428800,
+    "dataUploadBytes": 15728640,
+    "dataDownloadBytes": 36700160,
+    "smsCount": 12
+  },
+  "source": "mediation-system-id"
+}
+```
+
+#### Viewing Usage Data in the Portal
+
+1. **Navigate to Consumption page** in the sidebar
+2. **Apply filters**:
+   - **Period**: Select date range matching your submitted data
+   - **Network (MCCMNC)**: Filter by carrier network
+   - **IMSI**: Include or exclude specific IMSIs
+   - **Granularity**: Daily, Weekly, or Monthly aggregation
+3. **View results** in:
+   - **KPI cards**: Total data, upload, download, SMS counts
+   - **Chart**: Time-series visualization
+   - **Table**: Detailed per-IMSI breakdown
+
 ### Database Migration
 
 Before using the API, ensure the database migration has been run:

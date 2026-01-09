@@ -49,7 +49,7 @@ const formatBytes = (bytes) => {
 
       <!-- Period range -->
       <div class="field mb-3">
-        <label class="block text-500 mb-2">Period Range</label>
+        <label class="block text-500 mb-2">Period Date Range</label>
         <div class="flex gap-2 align-items-center">
           <Calendar
             :modelValue="settings.periodStart"
@@ -67,6 +67,34 @@ const formatBytes = (bytes) => {
             placeholder="End date"
           />
         </div>
+      </div>
+
+      <!-- Hour range -->
+      <div class="field mb-3">
+        <label class="block text-500 mb-2">Hour Range: {{ String(settings.hourStart).padStart(2, '0') }}:00 - {{ String(settings.hourEnd).padStart(2, '0') }}:59</label>
+        <div class="flex gap-2">
+          <InputNumber
+            :modelValue="settings.hourStart"
+            @update:modelValue="updateField('hourStart', $event)"
+            :min="0"
+            :max="settings.hourEnd"
+            showButtons
+            class="flex-1"
+            placeholder="Start hour"
+            suffix=":00"
+          />
+          <InputNumber
+            :modelValue="settings.hourEnd"
+            @update:modelValue="updateField('hourEnd', $event)"
+            :min="settings.hourStart"
+            :max="23"
+            showButtons
+            class="flex-1"
+            placeholder="End hour"
+            suffix=":59"
+          />
+        </div>
+        <small class="text-400">Constrains generated timestamps to this hour window (24h format)</small>
       </div>
 
       <!-- Bytes range -->

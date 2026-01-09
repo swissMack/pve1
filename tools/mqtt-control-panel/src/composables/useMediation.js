@@ -28,6 +28,8 @@ export function useMediation() {
     recordCount: 10,
     periodStart: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // 7 days ago
     periodEnd: new Date(),
+    hourStart: 0,             // Start hour (0-23)
+    hourEnd: 23,              // End hour (0-23)
     bytesMin: 1_000_000,      // 1 MB
     bytesMax: 100_000_000,    // 100 MB
     uploadRatio: 0.3,         // 30% upload, 70% download
@@ -68,10 +70,20 @@ export function useMediation() {
     return Math.floor(Math.random() * (max - min + 1)) + min
   }
 
-  function randomDateInRange(start, end) {
+  function randomDateInRange(start, end, hourStart = 0, hourEnd = 23) {
+    // Generate a random date between start and end
     const startTime = start.getTime()
     const endTime = end.getTime()
-    return new Date(startTime + Math.random() * (endTime - startTime))
+    const randomTime = startTime + Math.random() * (endTime - startTime)
+    const randomDate = new Date(randomTime)
+
+    // Constrain the hour to the specified range
+    const randomHour = randomInt(hourStart, hourEnd)
+    const randomMinute = randomInt(0, 59)
+    const randomSecond = randomInt(0, 59)
+
+    randomDate.setHours(randomHour, randomMinute, randomSecond, randomInt(0, 999))
+    return randomDate
   }
 
   function formatBytes(bytes) {
@@ -112,8 +124,8 @@ export function useMediation() {
     const uploadBytes = Math.floor(totalBytes * settings.uploadRatio)
     const downloadBytes = totalBytes - uploadBytes
 
-    // Random period within date range
-    const periodStart = randomDateInRange(settings.periodStart, settings.periodEnd)
+    // Random period within date range, constrained by hour settings
+    const periodStart = randomDateInRange(settings.periodStart, settings.periodEnd, settings.hourStart, settings.hourEnd)
     const periodEnd = new Date(periodStart.getTime() + 24 * 60 * 60 * 1000 - 1) // End of day
 
     return {

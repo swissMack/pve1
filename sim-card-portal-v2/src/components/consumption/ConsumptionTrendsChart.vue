@@ -150,7 +150,14 @@ const fetchTrends = async (isInitial = false) => {
 
 const formatPeriod = (period: string, mode: string) => {
   if (mode === 'hourly') {
-    return period
+    // Convert UTC hour to local timezone
+    // Period comes as "HH:00" in UTC
+    const utcHour = parseInt(period.split(':')[0], 10)
+    const now = new Date()
+    // Create a date object for today at the UTC hour
+    const utcDate = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), utcHour, 0, 0))
+    // Format in local timezone
+    return utcDate.toLocaleTimeString('en-CH', { hour: '2-digit', minute: '2-digit', hour12: false })
   }
 
   if (mode === 'weekly') {

@@ -915,6 +915,54 @@ sim-card-portal-v2/
 └── package.json           # Project dependencies and scripts
 ```
 
+## 📋 Recent Changes (January 2026)
+
+### Consumption Page Improvements
+
+| Change | Description | Files Modified |
+|--------|-------------|----------------|
+| **ICCID Label Fix** | Usage Details table now correctly displays "ICCID" instead of "IMSI" in the column header and CSV exports | `UsageResultsTable.vue` |
+| **Local Timezone Display** | 24-hour chart now shows times in browser's local timezone instead of UTC | `ConsumptionTrendsChart.vue` |
+| **Usage Details Query Fix** | Fixed SQL query to correctly display records where `period_end` extends past the query date range | `api-server-docker.js:1074` |
+| **KPI Cards Data Source Fix** | KPI cards now query actual `usage_records` table instead of empty `usage_cycles` table; fixed case-sensitive status matching | `api-server-docker.js` |
+
+### Mediation Simulator Enhancements (mqtt-control-panel)
+
+| Change | Description | Files Modified |
+|--------|-------------|----------------|
+| **Hour Range Filter** | Added ability to constrain generated timestamps to specific hour window (24h format) for targeted testing | `useMediation.js`, `UsageGenerator.vue` |
+
+### Bug Fixes Detail
+
+#### Usage Details SQL Query
+The original query `WHERE period_start >= $1 AND period_end <= $2` incorrectly filtered out records with 24-hour periods (where `period_end` is midnight the next day). Fixed to use `period_start` for both bounds:
+```sql
+WHERE period_start >= $1 AND period_start < ($2::date + INTERVAL '1 day')
+```
+
+#### KPI Cards Data Source
+The KPI endpoint was querying the `usage_cycles` table (billing cycles) which was empty. Fixed to query `usage_records` table (actual CDR data):
+```javascript
+// Before: Queried empty usage_cycles table
+// After: Queries usage_records for actual usage data
+SELECT COALESCE(SUM(total_bytes), 0) as total_bytes FROM usage_records WHERE period_start >= $1
+```
+
+Also fixed case-sensitive SIM status matching (`'Active'` vs `'ACTIVE'`):
+```javascript
+// Before: WHERE status = 'Active'
+// After: WHERE UPPER(status) = 'ACTIVE'
+```
+
+#### 24-hour Chart Timezone
+Hours are stored as UTC in the database. The chart now converts UTC hours to browser local timezone:
+```javascript
+// Convert UTC hour to local timezone display
+const utcHour = parseInt(period.split(':')[0], 10)
+const utcDate = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), utcHour, 0, 0))
+return utcDate.toLocaleTimeString('en-CH', { hour: '2-digit', minute: '2-digit', hour12: false })
+```
+
 ## 🤝 Contributing
 
 1. Fork the repository

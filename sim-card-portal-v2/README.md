@@ -674,15 +674,55 @@ Records submitted to `POST /api/v1/usage` or `POST /api/v1/usage/batch`:
 #### Viewing Usage Data in the Portal
 
 1. **Navigate to Consumption page** in the sidebar
-2. **Apply filters**:
-   - **Period**: Select date range matching your submitted data
-   - **Network (MCCMNC)**: Filter by carrier network
-   - **IMSI**: Include or exclude specific IMSIs
-   - **Granularity**: Daily, Weekly, or Monthly aggregation
+2. **Apply filters** using the controls at the top and in the Advanced Filters panel
 3. **View results** in:
-   - **KPI cards**: Total data, upload, download, SMS counts
-   - **Chart**: Time-series visualization
-   - **Table**: Detailed per-IMSI breakdown
+   - **KPI cards**: Total data, upload, download, active SIM counts
+   - **Chart**: Time-series visualization with bar (data) and line (cost) overlays
+   - **Table**: Detailed per-ICCID breakdown with CSV export
+
+#### Quick Filters (Top Bar)
+
+| Control | Options | Description |
+|---------|---------|-------------|
+| **Period Selector** | Today, Week, Month, Quarter, Custom | Quick date range presets |
+| **Granularity Toggle** | 24h, Daily, Weekly, Monthly | Time aggregation level for chart |
+
+#### Advanced Filters Panel
+
+Click the **"Advanced Filters"** header (purple filter icon) to expand the panel. A badge shows the count of active filters.
+
+##### Date Range Filter
+- **Start Date**: Beginning of query period (calendar picker)
+- **End Date**: End of query period (must be ≥ start date)
+- Format: `YYYY-MM-DD`
+
+##### Network (MCCMNC) Filter
+- Multi-select dropdown with carrier networks
+- Displays as "Carrier Name (MCCMNC)" e.g., "Swisscom (22801)"
+- Type to search/filter the list
+- Select multiple networks to include
+
+##### IMSI Filter (3 Modes)
+
+| Mode | Usage | Example |
+|------|-------|---------|
+| **Single** | Filter by one IMSI | `228010123456789` |
+| **Multiple** | Add multiple IMSIs | Click "+ Add another IMSI" for each |
+| **Range** | Include all IMSIs between From/To | From: `228010000000000` To: `228019999999999` |
+
+**Note**: IMSI must be exactly 15 digits.
+
+##### Applying Filters
+1. Configure your filter criteria
+2. Yellow indicator appears: *"Click Apply Filters to update results"*
+3. Click **Apply Filters** button
+4. Click **Clear All** to reset all filters
+
+##### Filter Interaction
+- Quick filters (Period, Granularity) apply immediately
+- Advanced filters require clicking "Apply Filters"
+- All filters work together to narrow results
+- Chart and table update based on combined filter state
 
 ### Analytics API Architecture (Planned)
 

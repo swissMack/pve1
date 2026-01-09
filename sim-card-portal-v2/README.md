@@ -684,6 +684,146 @@ Records submitted to `POST /api/v1/usage` or `POST /api/v1/usage/batch`:
    - **Chart**: Time-series visualization
    - **Table**: Detailed per-IMSI breakdown
 
+### Analytics API Architecture (Planned)
+
+The Analytics API is a **hybrid query layer** that provides unified access to both local recent data and historical data from backend billing/mediation systems.
+
+#### Data Retention Model
+
+| Data Age | Storage Location | Query Source |
+|----------|------------------|--------------|
+| 0-6 months | Local PostgreSQL | Analytics API queries locally |
+| 6+ months | Backend Billing/Mediation | Analytics API queries external system |
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    ANALYTICS API ARCHITECTURE                               │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+  INBOUND: Carrier Push (Every 5 Minutes)
+  ════════════════════════════════════════
+
+  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+  │  Carrier A  │    │  Carrier B  │    │  Carrier C  │
+  │  (Swisscom) │    │  (Sunrise)  │    │   (Salt)    │
+  └──────┬──────┘    └──────┬──────┘    └──────┬──────┘
+         │                  │                  │
+         │      CDRs pushed every 5 minutes    │
+         └──────────────────┼──────────────────┘
+                            ▼
+                   ┌─────────────────┐
+                   │   Mediation     │
+                   │   Engine        │
+                   │   (Aggregator)  │
+                   └────────┬────────┘
+                            │
+                            ▼ POST /api/v1/usage/batch
+                   ┌─────────────────┐
+                   │  SIM Card       │
+                   │  Portal API     │
+                   │  (Port 3001)    │
+                   └────────┬────────┘
+                            │
+                            ▼
+                   ┌─────────────────┐
+                   │  PostgreSQL     │
+                   │  ┌───────────┐  │
+                   │  │ usage_    │  │  ◄── Rolling 6 months only
+                   │  │ records   │  │      (older data purged)
+                   │  └───────────┘  │
+                   └─────────────────┘
+
+
+  OUTBOUND: User Queries (ICCID, IMSI, Date Range)
+  ════════════════════════════════════════════════
+
+                         User Query
+                   "Show me usage for ICCID X
+                    from Jan 2024 to Jan 2026"
+                            │
+                            ▼
+                   ┌─────────────────────────────────────────┐
+                   │         ANALYTICS API (Port 9010)       │
+                   │                                         │
+                   │  Unified Query Layer:                   │
+                   │  • Determines data source by date       │
+                   │  • Queries local OR backend OR both     │
+                   │  • Merges results seamlessly            │
+                   └─────────────────┬───────────────────────┘
+                                     │
+                    ┌────────────────┴────────────────┐
+                    │                                 │
+                    ▼                                 ▼
+         ┌─────────────────┐               ┌─────────────────┐
+         │  LOCAL DATA     │               │  BACKEND DATA   │
+         │  (< 6 months)   │               │  (> 6 months)   │
+         │                 │               │                 │
+         │  PostgreSQL     │               │  Billing /      │
+         │  usage_records  │               │  Mediation      │
+         │  daily_usage    │               │  System API     │
+         └─────────────────┘               └─────────────────┘
+                    │                                 │
+                    └────────────────┬────────────────┘
+                                     │
+                                     ▼ Merged Response
+                            ┌─────────────────┐
+                            │  Portal UI      │
+                            │  (User sees     │
+                            │   unified data) │
+                            └─────────────────┘
+```
+
+#### Analytics API Query Logic
+
+When a user queries data spanning multiple time periods:
+
+```
+Query: GET /analytics/usage?iccid=X&start=2024-01&end=2026-01
+
+1. Parse date range:
+   • start:  2024-01-01
+   • end:    2026-01-09
+   • cutoff: 2025-07-09 (6 months ago)
+
+2. Split query by data location:
+   • 2024-01 to 2025-07 → Query Backend Mediation API
+   • 2025-07 to 2026-01 → Query Local PostgreSQL
+
+3. Execute parallel queries to both sources
+
+4. Merge results into unified response
+
+5. Return to user as seamless dataset
+```
+
+#### Planned Analytics Endpoints
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /analytics/imsi` | Usage per IMSI |
+| `GET /analytics/imsi/network` | Usage per IMSI per network (MCCMNC) |
+| `GET /analytics/customer/network` | Usage per customer per network |
+| `GET /analytics/tenant/network` | Usage per tenant per network |
+| `GET /analytics/unique/imsi/count/*` | Unique IMSI counts |
+
+Query parameters: `tenant`, `customer`, `imsi[]`, `mccmnc[]`, `period`, `periodEnd`
+
+#### Why a Separate Analytics API?
+
+| Benefit | Description |
+|---------|-------------|
+| **Unified Data Access** | Users query one API regardless of data age |
+| **Transparent Sourcing** | System automatically routes to correct data source |
+| **6-Month Local Retention** | Fast queries for recent data, reduced storage costs |
+| **Historical Access** | Older data retrieved from backend billing on demand |
+| **Scalability** | Read-heavy analytics separated from write-heavy ingestion |
+
+#### Current Status
+
+- **Implemented**: Local data queries via Portal API consumption endpoints
+- **Planned**: Backend mediation system integration for historical data
+- **Planned**: Automatic data purging after 6 months
+
 ### Database Migration
 
 Before using the API, ensure the database migration has been run:

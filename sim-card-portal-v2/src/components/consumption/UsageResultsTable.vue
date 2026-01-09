@@ -122,7 +122,7 @@ const filteredData = computed(() => {
 
 // Export to CSV
 const exportCSV = () => {
-  const headers = ['IMSI', 'MCCMNC', 'Carrier', 'Data Usage', 'Bytes', 'Period', 'Last Event']
+  const headers = ['ICCID', 'MCCMNC', 'Carrier', 'Data Usage', 'Bytes', 'Period', 'Last Event']
   const csvRows = [headers.join(',')]
 
   filteredData.value.forEach(row => {
@@ -251,7 +251,7 @@ watch(() => props.filters, fetchUsageData, { deep: true })
           paginator: { class: 'bg-surface-dark border-border-dark' }
         }"
       >
-        <Column field="imsi" header="IMSI" sortable>
+        <Column field="imsi" header="ICCID" sortable>
           <template #body="{ data }">
             <span class="font-mono text-sm">{{ data.imsi }}</span>
           </template>

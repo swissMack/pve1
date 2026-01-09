@@ -61,3 +61,89 @@ This is a **SIM Card Portal v2** project with complete authentication and manage
 - Follow Vue 3 Composition API patterns
 - Maintain responsive design principles
 - Use modern CSS features (CSS Grid, Flexbox, custom properties)
+
+## Proxmox Deployment (192.168.1.59)
+
+### Server Access
+- **Host**: 192.168.1.59 (hostname: pve)
+- **SSH User**: root
+- **SSH Password**: edw4rd9O
+
+### Project Locations on Proxmox
+| Project | Path |
+|---------|------|
+| sim-card-portal-v2 | `/opt/projects/sim-card-portal-v2` |
+| mqtt-control-panel | `/opt/projects/MQTTServer/tools/mqtt-control-panel` |
+| MQTTServer (ecosystem) | `/opt/projects/MQTTServer` |
+
+### Running Containers
+| Container | Port | Purpose |
+|-----------|------|---------|
+| simcard-portal-api | 3001 | Node.js API server |
+| simcard-portal-frontend | 8080 | Nginx serving Vue.js SPA |
+| mqtt-control-panel | 5174 | Nginx serving control panel |
+| simcard-portal-db | 5434 | PostgreSQL database |
+
+### Deployment Commands
+
+#### 1. Sync source files to Proxmox
+```bash
+# sim-card-portal-v2 API
+sshpass -p 'edw4rd9O' rsync -avz --relative \
+  api/ src/ scripts/ \
+  root@192.168.1.59:/opt/projects/sim-card-portal-v2/
+
+# mqtt-control-panel
+sshpass -p 'edw4rd9O' rsync -avz \
+  /Users/mackmood/pve1/tools/mqtt-control-panel/src/ \
+  root@192.168.1.59:/opt/projects/MQTTServer/tools/mqtt-control-panel/src/
+```
+
+#### 2. Build on Proxmox
+```bash
+# SSH to server
+sshpass -p 'edw4rd9O' ssh root@192.168.1.59
+
+# Build sim-card-portal-v2
+cd /opt/projects/sim-card-portal-v2
+npm run api:build  # TypeScript API
+npm run build       # Frontend
+
+# Build mqtt-control-panel
+cd /opt/projects/MQTTServer/tools/mqtt-control-panel
+npm run build
+```
+
+#### 3. Restart Docker containers
+```bash
+# Rebuild and restart API (picks up new api-server-docker.js)
+cd /opt/projects/sim-card-portal-v2
+docker compose stop api && docker compose rm -f api
+docker compose build api && docker compose up -d api
+
+# Restart frontend (static files, no rebuild needed)
+docker restart simcard-portal-frontend
+
+# Restart mqtt-control-panel (static files via nginx)
+docker restart mqtt-control-panel
+```
+
+### Docker Architecture
+- **sim-card-portal-v2**: Uses `docker compose` with custom images
+  - API: Built from `docker/Dockerfile.api`, runs `scripts/api-server-docker.js`
+  - Frontend: Built from `docker/Dockerfile.frontend`, nginx serving `dist/`
+- **mqtt-control-panel**: Simple `nginx:alpine` container with bind mounts
+  - Mounts: `/opt/projects/MQTTServer/tools/mqtt-control-panel/dist` → `/usr/share/nginx/html`
+
+### Important Files for Deployment
+| File | Purpose |
+|------|---------|
+| `scripts/api-server-docker.js` | Standalone API server for Docker (not TypeScript) |
+| `docker/Dockerfile.api` | API container build instructions |
+| `docker/Dockerfile.frontend` | Frontend container build instructions |
+| `docker-compose.yml` | Service orchestration |
+
+### Accessing the Deployed Apps
+- **SIM Card Portal**: http://192.168.1.59:8080
+- **Portal API**: http://192.168.1.59:3001
+- **MQTT Control Panel**: http://192.168.1.59:5174

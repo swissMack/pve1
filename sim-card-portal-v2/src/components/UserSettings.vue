@@ -32,6 +32,19 @@ interface ApiKeyConfig {
   createdAt: string
 }
 
+// API Client (Mediation) interface
+interface MediationApiClient {
+  id: string
+  name: string
+  description: string | null
+  apiKeyPrefix: string
+  permissions: string[]
+  isActive: boolean
+  lastUsedAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
 type UserRole = 'Super Admin' | 'Admin' | 'Viewer' | 'FMP' | 'FMP Viewer' | 'DMP' | 'DMP Viewer' | 'CMP' | 'CMP Viewer'
 
 interface ManagedUser {
@@ -337,10 +350,186 @@ function toggleLLMEnabled() {
   })
 }
 
+// ============ API Clients Management (Mediation) ============
+const apiClients = ref<MediationApiClient[]>([])
+const isLoadingApiClients = ref(false)
+const showCreateApiClientDialog = ref(false)
+const showNewApiKeyDialog = ref(false)
+const newApiClientForm = ref({ name: '', description: '' })
+const newlyGeneratedApiKey = ref('')
+const isCreatingApiClient = ref(false)
+
+// API base URL for mediation API
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
+async function loadApiClients() {
+  isLoadingApiClients.value = true
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/v1/api-clients`, {
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    })
+    if (response.ok) {
+      const result = await response.json()
+      apiClients.value = result.data || []
+    } else {
+      console.error('Failed to load API clients:', response.status)
+      // Don't show error toast if it's just 401 (not authenticated)
+      if (response.status !== 401) {
+        toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to load API clients', life: 3000 })
+      }
+    }
+  } catch (error) {
+    console.error('Error loading API clients:', error)
+  } finally {
+    isLoadingApiClients.value = false
+  }
+}
+
+function openCreateApiClientDialog() {
+  newApiClientForm.value = { name: '', description: '' }
+  showCreateApiClientDialog.value = true
+}
+
+async function createApiClient() {
+  if (!newApiClientForm.value.name.trim()) {
+    toast.add({ severity: 'error', summary: 'Validation Error', detail: 'Client name is required', life: 3000 })
+    return
+  }
+
+  isCreatingApiClient.value = true
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/v1/api-clients`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: newApiClientForm.value.name.trim(),
+        description: newApiClientForm.value.description.trim() || undefined
+      })
+    })
+
+    if (response.ok) {
+      const result = await response.json()
+      newlyGeneratedApiKey.value = result.apiKey
+      showCreateApiClientDialog.value = false
+      showNewApiKeyDialog.value = true
+      await loadApiClients()
+      toast.add({ severity: 'success', summary: 'Success', detail: 'API client created successfully', life: 3000 })
+    } else {
+      const error = await response.json()
+      toast.add({ severity: 'error', summary: 'Error', detail: error.error?.message || 'Failed to create API client', life: 3000 })
+    }
+  } catch (error) {
+    console.error('Error creating API client:', error)
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to create API client', life: 3000 })
+  } finally {
+    isCreatingApiClient.value = false
+  }
+}
+
+async function toggleApiClientStatus(client: MediationApiClient) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/v1/api-clients/${client.id}/toggle`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    })
+
+    if (response.ok) {
+      await loadApiClients()
+      toast.add({
+        severity: 'success',
+        summary: 'Success',
+        detail: `API client ${client.isActive ? 'disabled' : 'enabled'}`,
+        life: 3000
+      })
+    } else {
+      toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to toggle API client status', life: 3000 })
+    }
+  } catch (error) {
+    console.error('Error toggling API client:', error)
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to toggle API client status', life: 3000 })
+  }
+}
+
+async function regenerateApiKey(client: MediationApiClient) {
+  confirm.require({
+    message: `Are you sure you want to regenerate the API key for "${client.name}"? The old key will stop working immediately.`,
+    header: 'Confirm Regenerate',
+    icon: 'pi pi-exclamation-triangle',
+    rejectLabel: 'Cancel',
+    acceptLabel: 'Regenerate',
+    acceptClass: 'p-button-warning',
+    accept: async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/v1/api-clients/${client.id}/regenerate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        })
+
+        if (response.ok) {
+          const result = await response.json()
+          newlyGeneratedApiKey.value = result.apiKey
+          showNewApiKeyDialog.value = true
+          await loadApiClients()
+          toast.add({ severity: 'success', summary: 'Success', detail: 'API key regenerated', life: 3000 })
+        } else {
+          toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to regenerate API key', life: 3000 })
+        }
+      } catch (error) {
+        console.error('Error regenerating API key:', error)
+        toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to regenerate API key', life: 3000 })
+      }
+    }
+  })
+}
+
+function deleteApiClient(client: MediationApiClient) {
+  confirm.require({
+    message: `Are you sure you want to delete "${client.name}"? This action cannot be undone.`,
+    header: 'Confirm Delete',
+    icon: 'pi pi-exclamation-triangle',
+    rejectLabel: 'Cancel',
+    acceptLabel: 'Delete',
+    acceptClass: 'p-button-danger',
+    accept: async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/v1/api-clients/${client.id}`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' }
+        })
+
+        if (response.ok || response.status === 204) {
+          await loadApiClients()
+          toast.add({ severity: 'success', summary: 'Success', detail: 'API client deleted', life: 3000 })
+        } else {
+          toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to delete API client', life: 3000 })
+        }
+      } catch (error) {
+        console.error('Error deleting API client:', error)
+        toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to delete API client', life: 3000 })
+      }
+    }
+  })
+}
+
+function copyApiKeyToClipboard() {
+  navigator.clipboard.writeText(newlyGeneratedApiKey.value)
+  toast.add({ severity: 'info', summary: 'Copied', detail: 'API key copied to clipboard', life: 2000 })
+}
+
+function formatDate(dateStr: string | null): string {
+  if (!dateStr) return 'Never'
+  return new Date(dateStr).toLocaleString()
+}
+
 // Load API key config on mount
 onMounted(() => {
   loadApiKeyConfig()
   loadLLMEnabled()
+  if (isSuperAdmin.value) {
+    loadApiClients()
+  }
 })
 
 // Helper functions
@@ -685,6 +874,119 @@ function deleteUser(user: ManagedUser) {
       </div>
     </div>
 
+    <!-- API Clients Management Section (Super Admin Only) -->
+    <div v-if="isSuperAdmin" class="mb-6">
+      <div class="bg-surface-dark border border-border-dark rounded-xl p-5">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+          <div class="flex items-center gap-3">
+            <div class="p-3 rounded-lg bg-blue-500/20">
+              <span class="material-symbols-outlined text-blue-400">api</span>
+            </div>
+            <div>
+              <h2 class="text-lg font-semibold text-white">API Clients (Mediation)</h2>
+              <p class="text-sm text-text-secondary">Manage API clients for external mediation systems</p>
+            </div>
+          </div>
+          <Button
+            label="Generate API Client"
+            icon="pi pi-plus"
+            @click="openCreateApiClientDialog"
+            class="w-full sm:w-auto"
+          />
+        </div>
+
+        <!-- No API Clients -->
+        <div v-if="apiClients.length === 0 && !isLoadingApiClients" class="bg-background-dark border border-border-dark rounded-lg p-4">
+          <div class="flex flex-col items-center gap-3 py-4">
+            <span class="material-symbols-outlined text-4xl text-text-secondary">key_off</span>
+            <p class="text-white font-medium">No API clients configured</p>
+            <p class="text-sm text-text-secondary text-center">Create an API client to allow external systems to send usage data</p>
+          </div>
+        </div>
+
+        <!-- Loading -->
+        <div v-else-if="isLoadingApiClients" class="bg-background-dark border border-border-dark rounded-lg p-4">
+          <div class="flex items-center justify-center gap-3 py-4">
+            <i class="pi pi-spin pi-spinner text-primary"></i>
+            <span class="text-text-secondary">Loading API clients...</span>
+          </div>
+        </div>
+
+        <!-- API Clients Table -->
+        <div v-else class="bg-background-dark border border-border-dark rounded-lg overflow-hidden">
+          <DataTable
+            :value="apiClients"
+            dataKey="id"
+            class="p-datatable-dark"
+            :paginator="apiClients.length > 5"
+            :rows="5"
+          >
+            <Column field="name" header="Name">
+              <template #body="{ data }">
+                <div>
+                  <p class="font-medium text-white">{{ data.name }}</p>
+                  <p v-if="data.description" class="text-xs text-text-secondary">{{ data.description }}</p>
+                </div>
+              </template>
+            </Column>
+            <Column field="apiKeyPrefix" header="Key Prefix">
+              <template #body="{ data }">
+                <span class="font-mono text-sm text-text-secondary">{{ data.apiKeyPrefix }}...</span>
+              </template>
+            </Column>
+            <Column field="isActive" header="Status">
+              <template #body="{ data }">
+                <Tag :value="data.isActive ? 'Active' : 'Disabled'" :severity="data.isActive ? 'success' : 'danger'" class="text-xs" />
+              </template>
+            </Column>
+            <Column field="lastUsedAt" header="Last Used">
+              <template #body="{ data }">
+                <span class="text-sm text-text-secondary">{{ formatDate(data.lastUsedAt) }}</span>
+              </template>
+            </Column>
+            <Column header="Actions" :exportable="false">
+              <template #body="{ data }">
+                <div class="flex items-center gap-1">
+                  <Button
+                    :icon="data.isActive ? 'pi pi-pause' : 'pi pi-play'"
+                    :severity="data.isActive ? 'warn' : 'success'"
+                    text
+                    rounded
+                    size="small"
+                    @click="toggleApiClientStatus(data)"
+                    v-tooltip.top="data.isActive ? 'Disable' : 'Enable'"
+                  />
+                  <Button
+                    icon="pi pi-refresh"
+                    severity="info"
+                    text
+                    rounded
+                    size="small"
+                    @click="regenerateApiKey(data)"
+                    v-tooltip.top="'Regenerate Key'"
+                  />
+                  <Button
+                    icon="pi pi-trash"
+                    severity="danger"
+                    text
+                    rounded
+                    size="small"
+                    @click="deleteApiClient(data)"
+                    v-tooltip.top="'Delete'"
+                  />
+                </div>
+              </template>
+            </Column>
+          </DataTable>
+        </div>
+
+        <p class="text-xs text-text-secondary mt-3">
+          <span class="material-symbols-outlined text-[14px] align-middle mr-1">info</span>
+          API clients can send usage data to <code class="bg-background-dark px-1 rounded">POST /api/v1/usage</code> and <code class="bg-background-dark px-1 rounded">POST /api/v1/usage/batch</code>
+        </p>
+      </div>
+    </div>
+
     <!-- Users DataTable -->
     <div class="max-w-5xl">
       <div class="bg-surface-dark border border-border-dark rounded-xl overflow-hidden">
@@ -1021,6 +1323,113 @@ function deleteUser(user: ManagedUser) {
           icon="pi pi-check"
           @click="saveApiKey"
           :loading="isSavingApiKey"
+        />
+      </template>
+    </Dialog>
+
+    <!-- Create API Client Dialog -->
+    <Dialog
+      v-model:visible="showCreateApiClientDialog"
+      modal
+      header="Create API Client"
+      :style="{ width: '28rem' }"
+      :draggable="false"
+    >
+      <div class="flex flex-col gap-4 pt-4">
+        <p class="text-text-secondary text-sm">
+          Create a new API client for external mediation systems to send usage data.
+        </p>
+        <div class="flex flex-col gap-2">
+          <label for="client-name" class="text-sm font-medium text-white">Client Name *</label>
+          <InputText
+            id="client-name"
+            v-model="newApiClientForm.name"
+            placeholder="e.g., MQTT Mediation Simulator"
+            class="w-full"
+          />
+        </div>
+        <div class="flex flex-col gap-2">
+          <label for="client-description" class="text-sm font-medium text-white">Description</label>
+          <InputText
+            id="client-description"
+            v-model="newApiClientForm.description"
+            placeholder="e.g., 3rd party mediation system"
+            class="w-full"
+          />
+        </div>
+        <div class="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+          <div class="flex items-start gap-2">
+            <span class="material-symbols-outlined text-blue-400 text-[18px] mt-0.5">info</span>
+            <p class="text-xs text-blue-300">
+              An API key will be generated automatically. Make sure to copy it - it will only be shown once!
+            </p>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <Button label="Cancel" severity="secondary" @click="showCreateApiClientDialog = false" :disabled="isCreatingApiClient" />
+        <Button
+          label="Generate Client"
+          icon="pi pi-key"
+          @click="createApiClient"
+          :loading="isCreatingApiClient"
+        />
+      </template>
+    </Dialog>
+
+    <!-- New API Key Display Dialog -->
+    <Dialog
+      v-model:visible="showNewApiKeyDialog"
+      modal
+      header="Your New API Key"
+      :style="{ width: '32rem' }"
+      :draggable="false"
+      :closable="false"
+    >
+      <div class="flex flex-col gap-4 pt-4">
+        <div class="bg-green-500/10 border border-green-500/30 rounded-lg p-3">
+          <div class="flex items-start gap-2">
+            <span class="material-symbols-outlined text-green-400 text-[18px] mt-0.5">check_circle</span>
+            <p class="text-sm text-green-300">API client created successfully!</p>
+          </div>
+        </div>
+
+        <div class="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
+          <div class="flex items-start gap-2">
+            <span class="material-symbols-outlined text-yellow-400 text-[18px] mt-0.5">warning</span>
+            <p class="text-xs text-yellow-300">
+              <strong>Copy this key now!</strong> It will not be shown again. Store it securely.
+            </p>
+          </div>
+        </div>
+
+        <div class="flex flex-col gap-2">
+          <label class="text-sm font-medium text-white">API Key</label>
+          <div class="flex gap-2">
+            <InputText
+              :modelValue="newlyGeneratedApiKey"
+              readonly
+              class="w-full font-mono text-sm"
+            />
+            <Button
+              icon="pi pi-copy"
+              severity="secondary"
+              @click="copyApiKeyToClipboard"
+              v-tooltip.top="'Copy to clipboard'"
+            />
+          </div>
+        </div>
+
+        <div class="bg-background-dark border border-border-dark rounded-lg p-3">
+          <p class="text-xs text-text-secondary mb-2">Usage in mqtt-control-panel:</p>
+          <code class="text-xs text-blue-300">Connection Settings → API Key</code>
+        </div>
+      </div>
+      <template #footer>
+        <Button
+          label="I've Copied the Key"
+          icon="pi pi-check"
+          @click="showNewApiKeyDialog = false"
         />
       </template>
     </Dialog>

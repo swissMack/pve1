@@ -19,6 +19,7 @@ import { createAuditLogger } from './middleware/audit-logger.js';
 import { SimService } from './services/sim.service.js';
 import { WebhookService } from './services/webhook.service.js';
 import { UsageService } from './services/usage.service.js';
+import { ApiClientService } from './services/api-client.service.js';
 
 // Types
 import type {
@@ -44,6 +45,7 @@ export function createV1Router(pool: Pool): Router {
   const simService = new SimService(pool);
   const webhookService = new WebhookService(pool);
   const usageService = new UsageService(pool);
+  const apiClientService = new ApiClientService(pool);
 
   // Initialize middleware
   const authenticate = createAuthMiddleware(pool);
@@ -571,6 +573,185 @@ export function createV1Router(pool: Pool): Router {
           }
         };
         res.status(404).json(errorResponse);
+      }
+    }
+  );
+
+  // ============================================================================
+  // API CLIENT MANAGEMENT ENDPOINTS
+  // ============================================================================
+
+  // List all API clients
+  router.get('/api-clients',
+    authenticate,
+    requirePermission('api-clients:read'),
+    async (req: Request, res: Response) => {
+      try {
+        const clients = await apiClientService.listClients();
+        res.json({ data: clients });
+      } catch (error) {
+        console.error('Error listing API clients:', error);
+        const errorResponse: ErrorResponse = {
+          error: {
+            code: 'INTERNAL_ERROR',
+            message: 'Failed to list API clients',
+            requestId: req.auth!.requestId
+          }
+        };
+        res.status(500).json(errorResponse);
+      }
+    }
+  );
+
+  // Create new API client
+  router.post('/api-clients',
+    authenticate,
+    requirePermission('api-clients:write'),
+    async (req: Request, res: Response) => {
+      try {
+        const { name, description, permissions } = req.body;
+
+        if (!name || typeof name !== 'string' || name.trim().length === 0) {
+          const errorResponse: ErrorResponse = {
+            error: {
+              code: 'VALIDATION_ERROR',
+              message: 'Name is required',
+              requestId: req.auth!.requestId
+            }
+          };
+          res.status(400).json(errorResponse);
+          return;
+        }
+
+        const result = await apiClientService.createClient({
+          name: name.trim(),
+          description: description?.trim(),
+          permissions
+        });
+
+        res.status(201).json({
+          client: result.client,
+          apiKey: result.apiKey,
+          message: 'API key shown only once. Save it securely!'
+        });
+      } catch (error) {
+        console.error('Error creating API client:', error);
+        const errorResponse: ErrorResponse = {
+          error: {
+            code: 'INTERNAL_ERROR',
+            message: 'Failed to create API client',
+            requestId: req.auth!.requestId
+          }
+        };
+        res.status(500).json(errorResponse);
+      }
+    }
+  );
+
+  // Toggle API client status (enable/disable)
+  router.post('/api-clients/:clientId/toggle',
+    authenticate,
+    requirePermission('api-clients:write'),
+    async (req: Request, res: Response) => {
+      try {
+        const client = await apiClientService.toggleClientStatus(req.params.clientId);
+
+        if (!client) {
+          const errorResponse: ErrorResponse = {
+            error: {
+              code: 'CLIENT_NOT_FOUND',
+              message: `API client ${req.params.clientId} not found`,
+              requestId: req.auth!.requestId
+            }
+          };
+          res.status(404).json(errorResponse);
+          return;
+        }
+
+        res.json({ data: client });
+      } catch (error) {
+        console.error('Error toggling API client:', error);
+        const errorResponse: ErrorResponse = {
+          error: {
+            code: 'INTERNAL_ERROR',
+            message: 'Failed to toggle API client status',
+            requestId: req.auth!.requestId
+          }
+        };
+        res.status(500).json(errorResponse);
+      }
+    }
+  );
+
+  // Regenerate API key
+  router.post('/api-clients/:clientId/regenerate',
+    authenticate,
+    requirePermission('api-clients:write'),
+    async (req: Request, res: Response) => {
+      try {
+        const result = await apiClientService.regenerateKey(req.params.clientId);
+
+        if (!result) {
+          const errorResponse: ErrorResponse = {
+            error: {
+              code: 'CLIENT_NOT_FOUND',
+              message: `API client ${req.params.clientId} not found`,
+              requestId: req.auth!.requestId
+            }
+          };
+          res.status(404).json(errorResponse);
+          return;
+        }
+
+        res.json({
+          apiKey: result.apiKey,
+          message: 'New API key generated. Save it securely! The old key is now invalid.'
+        });
+      } catch (error) {
+        console.error('Error regenerating API key:', error);
+        const errorResponse: ErrorResponse = {
+          error: {
+            code: 'INTERNAL_ERROR',
+            message: 'Failed to regenerate API key',
+            requestId: req.auth!.requestId
+          }
+        };
+        res.status(500).json(errorResponse);
+      }
+    }
+  );
+
+  // Delete API client
+  router.delete('/api-clients/:clientId',
+    authenticate,
+    requirePermission('api-clients:write'),
+    async (req: Request, res: Response) => {
+      try {
+        const deleted = await apiClientService.deleteClient(req.params.clientId);
+
+        if (!deleted) {
+          const errorResponse: ErrorResponse = {
+            error: {
+              code: 'CLIENT_NOT_FOUND',
+              message: `API client ${req.params.clientId} not found`,
+              requestId: req.auth!.requestId
+            }
+          };
+          res.status(404).json(errorResponse);
+          return;
+        }
+
+        res.status(204).send();
+      } catch (error) {
+        console.error('Error deleting API client:', error);
+        const errorResponse: ErrorResponse = {
+          error: {
+            code: 'INTERNAL_ERROR',
+            message: 'Failed to delete API client',
+            requestId: req.auth!.requestId
+          }
+        };
+        res.status(500).json(errorResponse);
       }
     }
   );

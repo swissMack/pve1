@@ -12,6 +12,7 @@ import BillingView from './components/BillingView.vue'
 import ProvisioningView from './components/ProvisioningView.vue'
 import TestingView from './components/TestingView.vue'
 import SimulatorView from './components/SimulatorView.vue'
+import MediationView from './components/MediationView.vue'
 import { useMqtt } from './composables/useMqtt'
 
 const showInfoDialog = ref(false)
@@ -159,6 +160,14 @@ onMounted(() => {
             <i class="pi pi-bolt"></i>
             <span>Simulator</span>
           </button>
+          <button
+            class="view-tab"
+            :class="{ active: activeView === 'mediation' }"
+            @click="activeView = 'mediation'"
+          >
+            <i class="pi pi-send"></i>
+            <span>Mediation</span>
+          </button>
         </nav>
         <nav class="service-tabs">
           <button class="service-tab info-tab" @click="showInfoDialog = true" title="Architecture & Testing Info">
@@ -277,6 +286,11 @@ onMounted(() => {
       <!-- Simulator View -->
       <template v-else-if="activeView === 'simulator'">
         <SimulatorView />
+      </template>
+
+      <!-- Mediation View -->
+      <template v-else-if="activeView === 'mediation'">
+        <MediationView />
       </template>
     </main>
 

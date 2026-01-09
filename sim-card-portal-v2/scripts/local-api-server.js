@@ -79,7 +79,7 @@ const SCHEMA = process.env.USE_PUBLIC_SCHEMA === 'true' ? '' : '"sim-card-portal
 
 // Middleware
 app.use(cors())
-app.use(express.json())
+app.use(express.json({ limit: '100mb' }))
 
 // Mount Provisioning API v1 Router
 // Endpoints: /api/v1/sims, /api/v1/webhooks, /api/v1/usage

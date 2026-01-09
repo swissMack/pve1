@@ -8,6 +8,7 @@ import cors from 'cors'
 import pg from 'pg'
 import { createClient } from '@supabase/supabase-js'
 import Anthropic from '@anthropic-ai/sdk'
+import { createHash, randomBytes } from 'crypto'
 
 const { Pool } = pg
 
@@ -1442,6 +1443,227 @@ app.get('/api/llm/pending-actions', async (req, res) => {
     success: true,
     actions: []
   })
+})
+
+// ============================================================================
+// API CLIENT MANAGEMENT ENDPOINTS
+// ============================================================================
+
+// Generate a random API key with prefix
+function generateApiKey() {
+  const prefix = 'mqs_'  // mediation query simulator
+  const random = randomBytes(24).toString('base64url')
+  return prefix + random
+}
+
+// Hash API key with SHA256
+function hashApiKey(apiKey) {
+  return createHash('sha256').update(apiKey).digest('hex')
+}
+
+// GET /api/v1/api-clients - List all API clients
+app.get('/api/v1/api-clients', async (req, res) => {
+  try {
+    let clients
+    if (isSupabaseConfigured()) {
+      const { data, error } = await supabase
+        .from('api_clients')
+        .select('id, name, description, api_key_prefix, permissions, is_active, last_used_at, created_at, updated_at')
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      clients = data || []
+    } else {
+      const result = await pool.query(`
+        SELECT id, name, description, api_key_prefix, permissions, is_active, last_used_at, created_at, updated_at
+        FROM ${SCHEMA}api_clients
+        ORDER BY created_at DESC
+      `)
+      clients = result.rows
+    }
+
+    const formatted = clients.map(row => ({
+      id: row.id,
+      name: row.name,
+      description: row.description,
+      apiKeyPrefix: row.api_key_prefix,
+      permissions: row.permissions || [],
+      isActive: row.is_active,
+      lastUsedAt: row.last_used_at,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    }))
+
+    res.json({ data: formatted })
+  } catch (error) {
+    console.error('Error listing API clients:', error)
+    res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Failed to list API clients' } })
+  }
+})
+
+// POST /api/v1/api-clients - Create new API client
+app.post('/api/v1/api-clients', async (req, res) => {
+  try {
+    const { name, description, permissions } = req.body
+
+    if (!name || typeof name !== 'string' || name.trim().length === 0) {
+      return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Name is required' } })
+    }
+
+    const apiKey = generateApiKey()
+    const apiKeyHash = hashApiKey(apiKey)
+    const apiKeyPrefix = apiKey.substring(0, 8)
+    const defaultPermissions = permissions || ['usage:write', 'usage:read', 'sims:read']
+
+    let client
+    if (isSupabaseConfigured()) {
+      const { data, error } = await supabase
+        .from('api_clients')
+        .insert({
+          name: name.trim(),
+          description: description?.trim() || null,
+          api_key_hash: apiKeyHash,
+          api_key_prefix: apiKeyPrefix,
+          permissions: defaultPermissions,
+          is_active: true
+        })
+        .select('id, name, description, api_key_prefix, permissions, is_active, last_used_at, created_at, updated_at')
+        .single()
+      if (error) throw error
+      client = data
+    } else {
+      const result = await pool.query(`
+        INSERT INTO ${SCHEMA}api_clients (name, description, api_key_hash, api_key_prefix, permissions, is_active)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING id, name, description, api_key_prefix, permissions, is_active, last_used_at, created_at, updated_at
+      `, [name.trim(), description?.trim() || null, apiKeyHash, apiKeyPrefix, JSON.stringify(defaultPermissions), true])
+      client = result.rows[0]
+    }
+
+    res.status(201).json({
+      client: {
+        id: client.id,
+        name: client.name,
+        description: client.description,
+        apiKeyPrefix: client.api_key_prefix,
+        permissions: client.permissions || [],
+        isActive: client.is_active,
+        lastUsedAt: client.last_used_at,
+        createdAt: client.created_at,
+        updatedAt: client.updated_at
+      },
+      apiKey,
+      message: 'API key shown only once. Save it securely!'
+    })
+  } catch (error) {
+    console.error('Error creating API client:', error)
+    res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Failed to create API client' } })
+  }
+})
+
+// POST /api/v1/api-clients/:clientId/toggle - Toggle client status
+app.post('/api/v1/api-clients/:clientId/toggle', async (req, res) => {
+  try {
+    const { clientId } = req.params
+    let client
+
+    if (isSupabaseConfigured()) {
+      const { data: current } = await supabase
+        .from('api_clients')
+        .select('is_active')
+        .eq('id', clientId)
+        .single()
+      if (!current) return res.status(404).json({ error: { code: 'CLIENT_NOT_FOUND', message: 'API client not found' } })
+
+      const { data, error } = await supabase
+        .from('api_clients')
+        .update({ is_active: !current.is_active, updated_at: new Date().toISOString() })
+        .eq('id', clientId)
+        .select('id, name, description, api_key_prefix, permissions, is_active, last_used_at, created_at, updated_at')
+        .single()
+      if (error) throw error
+      client = data
+    } else {
+      const currentResult = await pool.query(`SELECT is_active FROM ${SCHEMA}api_clients WHERE id = $1`, [clientId])
+      if (currentResult.rows.length === 0) {
+        return res.status(404).json({ error: { code: 'CLIENT_NOT_FOUND', message: 'API client not found' } })
+      }
+      const newStatus = !currentResult.rows[0].is_active
+      const result = await pool.query(`
+        UPDATE ${SCHEMA}api_clients SET is_active = $1, updated_at = NOW() WHERE id = $2
+        RETURNING id, name, description, api_key_prefix, permissions, is_active, last_used_at, created_at, updated_at
+      `, [newStatus, clientId])
+      client = result.rows[0]
+    }
+
+    res.json({
+      data: {
+        id: client.id,
+        name: client.name,
+        description: client.description,
+        apiKeyPrefix: client.api_key_prefix,
+        permissions: client.permissions || [],
+        isActive: client.is_active,
+        lastUsedAt: client.last_used_at,
+        createdAt: client.created_at,
+        updatedAt: client.updated_at
+      }
+    })
+  } catch (error) {
+    console.error('Error toggling API client:', error)
+    res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Failed to toggle API client status' } })
+  }
+})
+
+// POST /api/v1/api-clients/:clientId/regenerate - Regenerate API key
+app.post('/api/v1/api-clients/:clientId/regenerate', async (req, res) => {
+  try {
+    const { clientId } = req.params
+    const apiKey = generateApiKey()
+    const apiKeyHash = hashApiKey(apiKey)
+    const apiKeyPrefix = apiKey.substring(0, 8)
+
+    if (isSupabaseConfigured()) {
+      const { error } = await supabase
+        .from('api_clients')
+        .update({ api_key_hash: apiKeyHash, api_key_prefix: apiKeyPrefix, updated_at: new Date().toISOString() })
+        .eq('id', clientId)
+      if (error) throw error
+    } else {
+      const result = await pool.query(`
+        UPDATE ${SCHEMA}api_clients SET api_key_hash = $1, api_key_prefix = $2, updated_at = NOW() WHERE id = $3 RETURNING id
+      `, [apiKeyHash, apiKeyPrefix, clientId])
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: { code: 'CLIENT_NOT_FOUND', message: 'API client not found' } })
+      }
+    }
+
+    res.json({ apiKey, message: 'New API key generated. Save it securely! The old key is now invalid.' })
+  } catch (error) {
+    console.error('Error regenerating API key:', error)
+    res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Failed to regenerate API key' } })
+  }
+})
+
+// DELETE /api/v1/api-clients/:clientId - Delete API client
+app.delete('/api/v1/api-clients/:clientId', async (req, res) => {
+  try {
+    const { clientId } = req.params
+
+    if (isSupabaseConfigured()) {
+      const { error } = await supabase.from('api_clients').delete().eq('id', clientId)
+      if (error) throw error
+    } else {
+      const result = await pool.query(`DELETE FROM ${SCHEMA}api_clients WHERE id = $1`, [clientId])
+      if (result.rowCount === 0) {
+        return res.status(404).json({ error: { code: 'CLIENT_NOT_FOUND', message: 'API client not found' } })
+      }
+    }
+
+    res.status(204).send()
+  } catch (error) {
+    console.error('Error deleting API client:', error)
+    res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Failed to delete API client' } })
+  }
 })
 
 app.listen(PORT, '0.0.0.0', () => {

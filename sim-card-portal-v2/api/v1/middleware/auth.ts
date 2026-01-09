@@ -77,6 +77,53 @@ export function createAuthMiddleware(pool: Pool) {
         apiKey = apiKeyHeader;
       }
 
+      // Development mode bypass - skip auth if SKIP_AUTH=true
+      // Optional: Set SKIP_AUTH_UNTIL to an ISO timestamp to auto-expire the bypass
+      // Example: SKIP_AUTH_UNTIL=2025-01-10T18:00:00Z (expires at 6pm on Jan 10)
+      if (process.env.SKIP_AUTH === 'true') {
+        const skipAuthUntil = process.env.SKIP_AUTH_UNTIL;
+
+        // Check if bypass has expired
+        if (skipAuthUntil) {
+          const expiryTime = new Date(skipAuthUntil).getTime();
+          const now = Date.now();
+
+          if (now > expiryTime) {
+            console.log(`[Auth] SKIP_AUTH bypass expired at ${skipAuthUntil}`);
+            // Don't bypass - continue to normal auth flow
+          } else {
+            const remainingMs = expiryTime - now;
+            const remainingMin = Math.round(remainingMs / 60000);
+            console.log(`[Auth] SKIP_AUTH bypass active, expires in ${remainingMin} minutes`);
+
+            req.auth = {
+              clientId: 'dev-client',
+              client: {
+                id: 'dev-client',
+                name: 'Development Client (Test Mode)',
+                permissions: ['usage:write', 'usage:read', 'sims:read', 'sims:write', 'provisioning:*', 'webhooks:*', 'api-clients:*'],
+                isActive: true
+              } as ApiClient,
+              requestId
+            };
+            return next();
+          }
+        } else {
+          // No expiry set - bypass indefinitely (development only!)
+          req.auth = {
+            clientId: 'dev-client',
+            client: {
+              id: 'dev-client',
+              name: 'Development Client',
+              permissions: ['usage:write', 'usage:read', 'sims:read', 'sims:write', 'provisioning:*', 'webhooks:*', 'api-clients:*'],
+              isActive: true
+            } as ApiClient,
+            requestId
+          };
+          return next();
+        }
+      }
+
       if (!apiKey) {
         const errorResponse: ErrorResponse = {
           error: {

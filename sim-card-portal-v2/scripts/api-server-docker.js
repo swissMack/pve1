@@ -700,21 +700,22 @@ app.get('/api/consumption/kpis', async (req, res) => {
   try {
     const now = new Date()
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-    const cycleId = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0')
+    const startOfMonthStr = startOfMonth.toISOString().split('T')[0]
 
-    // Get current month usage from usage_cycles
+    // Get current month usage from usage_records (actual CDR data)
     const usageResult = await pool.query(
       'SELECT COALESCE(SUM(total_bytes), 0) as total_bytes, ' +
-      'COALESCE(SUM(total_upload_bytes), 0) as upload_bytes, ' +
-      'COALESCE(SUM(total_download_bytes), 0) as download_bytes ' +
-      'FROM ' + SCHEMA + 'usage_cycles WHERE cycle_id = $1',
-      [cycleId]
+      'COALESCE(SUM(data_upload_bytes), 0) as upload_bytes, ' +
+      'COALESCE(SUM(data_download_bytes), 0) as download_bytes, ' +
+      'COUNT(DISTINCT iccid) as unique_iccids ' +
+      'FROM ' + SCHEMA + 'usage_records WHERE period_start >= $1',
+      [startOfMonthStr]
     )
 
-    // Get active SIM count
+    // Get active SIM count (case-insensitive status match)
     const simResult = await pool.query(
-      'SELECT COUNT(*) as count FROM ' + SCHEMA + 'sim_cards WHERE status = $1',
-      ['Active']
+      'SELECT COUNT(*) as count FROM ' + SCHEMA + 'sim_cards WHERE UPPER(status) = $1',
+      ['ACTIVE']
     )
 
     const totalBytes = parseFloat(usageResult.rows[0]?.total_bytes) || 0

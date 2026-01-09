@@ -1064,14 +1064,15 @@ app.get('/api/consumption/usage-details', async (req, res) => {
     }
 
     // Query usage records grouped by ICCID/IMSI
+    // Use period_start for filtering (period_end can extend beyond end_date)
     const result = await pool.query(`
       SELECT
         iccid,
         SUM(total_bytes) as total_bytes,
         COUNT(*) as record_count,
-        MAX(period_end) as latest_event_at
+        MAX(period_start) as latest_event_at
       FROM ${SCHEMA}usage_records
-      WHERE period_start >= $1 AND period_end <= $2
+      WHERE period_start >= $1 AND period_start < ($2::date + INTERVAL '1 day')
       GROUP BY iccid
       ORDER BY total_bytes DESC
     `, [start_date, end_date])

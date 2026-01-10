@@ -121,6 +121,224 @@ MQTT_BROKER_URL=mqtt://192.168.1.199:1883
                      └──────────────────┘
 ```
 
+## 🏗️ Real-Time IoT Architecture
+
+This section explains the system architecture for real-time device monitoring, covering the MQTT Bridge, WebSocket communication, and component classification.
+
+### System Overview
+
+The real-time functionality is built on three layers:
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        DEVICE LAYER                                      │
+│   IoT devices publish sensor/location data via MQTT protocol             │
+└─────────────────────────────────────┬───────────────────────────────────┘
+                                      │ MQTT (Port 1883)
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                     MESSAGE BROKER (EMQX)                                │
+│   Routes messages to all subscribers using pub/sub pattern               │
+│   Ports: 1883 (MQTT), 8083 (WebSocket), 18083 (Dashboard)               │
+└─────────────────────────────────────┬───────────────────────────────────┘
+                                      │ Subscribe to topics
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                     MQTT BRIDGE SERVICE                                  │
+│   Validates → Persists to DB → Broadcasts via WebSocket                  │
+│   Location: services/mqtt-bridge/                                        │
+└──────────────┬─────────────────────────────────┬────────────────────────┘
+               │ SQL                              │ WebSocket (Port 3002)
+               ▼                                  ▼
+┌──────────────────────────┐      ┌───────────────────────────────────────┐
+│      PostgreSQL/         │      │           FRONTEND                     │
+│       Supabase           │      │   Real-time dashboard updates          │
+└──────────────────────────┘      └───────────────────────────────────────┘
+```
+
+### MQTT Topic Structure
+
+Devices communicate using a hierarchical topic structure:
+
+| Topic Pattern | Purpose | Example Payload |
+|--------------|---------|-----------------|
+| `simportal/devices/{ID}/sensors` | Temperature, humidity, battery | `{ "temperature": 22.5, "humidity": 65 }` |
+| `simportal/devices/{ID}/location` | GPS coordinates | `{ "latitude": 47.37, "longitude": 8.54 }` |
+| `simportal/devices/{ID}/commands` | Control messages TO devices | `{ "type": "set_interval", "value": 15 }` |
+
+### The MQTT Bridge - Core Middleware
+
+The MQTT Bridge (`services/mqtt-bridge/`) is the **critical middleware** that connects the MQTT messaging layer to the application. Without it:
+- No data would be persisted (MQTT is fire-and-forget)
+- Frontend would need direct broker access (security risk)
+- No centralized validation or business logic
+
+#### Bridge Components
+
+| File | Responsibility |
+|------|----------------|
+| `index.js` | Main orchestrator - connects all components |
+| `mqttClient.js` | Connects to EMQX, subscribes to topics |
+| `messageParser.js` | Validates incoming JSON payloads |
+| `dbService.js` | Persists to PostgreSQL/Supabase |
+| `websocketServer.js` | Real-time push to browser clients |
+
+#### Message Flow
+
+```
+1. DEVICE publishes → MQTT topic
+2. EMQX BROKER routes → all subscribers
+3. MQTT BRIDGE receives:
+   ├─→ messageParser validates payload
+   ├─→ dbService writes to device_sensor_history / device_location_history
+   ├─→ dbService updates devices table (latest values)
+   └─→ websocketServer broadcasts to subscribed clients
+4. FRONTEND receives WebSocket message → updates UI
+```
+
+#### Database Tables
+
+| Table | Purpose |
+|-------|---------|
+| `device_sensor_history` | Time-series sensor readings (temperature, humidity, etc.) |
+| `device_location_history` | GPS location history |
+| `devices` | Master device records with latest status |
+
+### WebSocket Communication
+
+The frontend connects via WebSocket to receive real-time updates.
+
+#### Connection Path (Production)
+
+```
+Browser → ws://host:8080/ws → nginx proxy → mqtt-bridge:3002
+```
+
+**Important**: The frontend uses dynamic URL detection. When `VITE_WEBSOCKET_URL` is not set, it automatically connects to the same host:
+
+```typescript
+// src/services/websocketService.ts
+const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+const url = `${protocol}//${window.location.host}/ws`;
+```
+
+#### WebSocket Message Types
+
+**Client → Server:**
+```json
+{ "type": "subscribe", "deviceIds": ["DEV001", "DEV002"] }
+{ "type": "subscribe", "deviceIds": "*" }
+{ "type": "unsubscribe", "deviceIds": ["DEV001"] }
+```
+
+**Server → Client:**
+```json
+{ "type": "sensor_update", "deviceId": "DEV001", "data": { "temperature": 22.5 } }
+{ "type": "location_update", "deviceId": "DEV001", "data": { "latitude": 47.37 } }
+{ "type": "connection_status", "mqtt": "connected" }
+```
+
+### Component Classification
+
+#### Production Components (Required)
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| **EMQX Broker** | Docker: `mqtt-emqx` | MQTT message routing |
+| **MQTT Bridge** | `services/mqtt-bridge/` | Message processing, persistence, WebSocket |
+| **API Server** | `api/v1/` | REST API for SIM/device management |
+| **Frontend** | `src/` | Vue.js dashboard |
+| **PostgreSQL** | Supabase/Docker | Persistent storage |
+
+#### Development/Test Tools (Optional)
+
+| Tool | Location | Purpose |
+|------|----------|---------|
+| **MQTT Control Panel** | `tools/mqtt-control-panel/` | Device simulator UI - simulates 8 devices |
+| **Data Generator** | Part of control panel | Continuous test data stream |
+| **API Console** | Control panel component | Manual API testing |
+
+The **MQTT Control Panel** is valuable for development because:
+- No real IoT hardware needed
+- Can simulate edge cases (device offline, bad GPS, etc.)
+- Visualizes MQTT message flow in real-time
+
+### Docker Network Topology
+
+```
+┌────────────────────────────────────────────────────────────────────┐
+│                        HOST MACHINE                                 │
+│                                                                     │
+│   ┌─────────────────── mqtt-network ───────────────────┐           │
+│   │                                                     │           │
+│   │   ┌─────────────┐                                   │           │
+│   │   │ mqtt-emqx   │ :1883 (MQTT)                     │           │
+│   │   │ (EMQX 5.x)  │ :8083 (WebSocket)                │           │
+│   │   └──────┬──────┘ :18083 (Dashboard)               │           │
+│   │          │                                          │           │
+│   └──────────┼──────────────────────────────────────────┘           │
+│              │                                                       │
+│   ┌──────────┼──────── simcard-network ─────────────────┐           │
+│   │          │                                           │           │
+│   │   ┌──────▼──────┐     ┌─────────────┐               │           │
+│   │   │ mqtt-bridge │────►│  PostgreSQL │               │           │
+│   │   │   :3002     │     │   :5432     │               │           │
+│   │   └──────┬──────┘     └─────────────┘               │           │
+│   │          │ WebSocket                                 │           │
+│   │          │                                           │           │
+│   │   ┌──────▼──────┐     ┌─────────────┐               │           │
+│   │   │   nginx     │────►│     api     │               │           │
+│   │   │   :8080     │     │   :3001     │               │           │
+│   │   │ (frontend)  │     │             │               │           │
+│   │   └─────────────┘     └─────────────┘               │           │
+│   │                                                      │           │
+│   └──────────────────────────────────────────────────────┘           │
+│                                                                      │
+│   Key: mqtt-bridge connects BOTH networks - it's the bridge!        │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+### Environment Variables
+
+#### MQTT Bridge Configuration
+
+```env
+# MQTT Connection
+MQTT_BROKER_URL=mqtt://mqtt-emqx:1883
+MQTT_CLIENT_ID=simcard-portal-bridge
+MQTT_TOPIC_PREFIX=simportal/devices
+
+# WebSocket Server
+WEBSOCKET_PORT=3002
+
+# Database
+DB_HOST=192.168.1.59
+DB_PORT=5433
+DB_USER=postgres
+DB_PASSWORD=your-password
+DB_NAME=postgres
+```
+
+#### Frontend Configuration
+
+```env
+# Leave VITE_WEBSOCKET_URL unset to use dynamic URL (recommended)
+# VITE_WEBSOCKET_URL=
+
+# MQTT broker for direct command publishing (optional)
+VITE_MQTT_BROKER_URL=ws://192.168.1.59:8083/mqtt
+```
+
+### Why This Architecture?
+
+| Principle | Benefit |
+|-----------|---------|
+| **Event-Driven** | No polling - everything is push-based |
+| **Decoupled Services** | MQTT Bridge independent from API; can scale separately |
+| **Subscription Model** | Clients only receive data they subscribe to |
+| **Persistent + Real-time** | Data stored in DB AND pushed live to UI |
+| **Security** | Browser never connects directly to MQTT broker |
+
 ## 🔌 Testing the Provisioning API
 
 The Provisioning API v1 provides endpoints for SIM lifecycle management, webhook registration, and usage/mediation data ingestion. This API is designed for integration with external provisioning and mediation systems.

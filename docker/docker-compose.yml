@@ -150,6 +150,29 @@ services:
       influxdb:
         condition: service_healthy
 
+  # Portainer - Docker Management UI
+  # Access at: http://localhost:9000 or https://localhost:9443
+  # First-time setup: Create admin account (no default password)
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: mqtt-portainer
+    hostname: portainer
+    ports:
+      - "${PORTAINER_HTTP_PORT:-9000}:9000"
+      - "${PORTAINER_HTTPS_PORT:-9443}:9443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9000/api/system/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - mqtt-network
+    restart: unless-stopped
+
 volumes:
   emqx-data:
     name: mqtt-emqx-data
@@ -163,6 +186,8 @@ volumes:
     name: mqtt-prometheus-data
   grafana-data:
     name: mqtt-grafana-data
+  portainer-data:
+    name: mqtt-portainer-data
 
 networks:
   mqtt-network:

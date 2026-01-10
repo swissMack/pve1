@@ -18,7 +18,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-}
       DB_NAME: ${DB_NAME:-postgres}
     ports:
-      - "3001:3001"
+      - "${API_PORT:-3001}:3001"
     networks:
       - simcard-network
     restart: unless-stopped
@@ -33,7 +33,7 @@ services:
     security_opt:
       - label=disable
     ports:
-      - "8080:80"
+      - "${FRONTEND_PORT:-8080}:80"
     depends_on:
       - api
     networks:
@@ -61,7 +61,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-}
       DB_NAME: ${DB_NAME:-postgres}
     ports:
-      - "3002:3002"
+      - "${WEBSOCKET_PORT:-3002}:3002"
     networks:
       - simcard-network
       - mqtt-network

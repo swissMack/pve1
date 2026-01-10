@@ -12,7 +12,12 @@ logs/
 .env
 .env.local
 .env.*.local
+.env.production
 docker/.env
+**/.env
+**/.env.local
+**/.env.production
+**/services/**/.env
 
 # Generated certificates (should be regenerated per environment)
 certs/

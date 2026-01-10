@@ -26,8 +26,13 @@ let messageStats = {
 }
 
 function initMqttClient() {
-  // Connect to EMQX on Proxmox
-  const brokerUrl = process.env.MQTT_BROKER_URL || 'mqtt://192.168.1.59:1883'
+  // Connect to EMQX broker - requires MQTT_BROKER_URL env var
+  const brokerUrl = process.env.MQTT_BROKER_URL
+  if (!brokerUrl) {
+    console.error('ERROR: MQTT_BROKER_URL environment variable is required')
+    console.error('Example: MQTT_BROKER_URL=mqtt://localhost:1883')
+    process.exit(1)
+  }
   mqttClient = mqtt.connect(brokerUrl, {
     clientId: `control-panel-monitor-${Date.now()}`,
     clean: true
@@ -221,8 +226,13 @@ app.post('/api/generator/restart', async (req, res) => {
 
 // ============ EMQX Status Endpoints ============
 
-// EMQX API configuration - use Proxmox server
-const EMQX_API_BASE = process.env.EMQX_API_URL || 'http://192.168.1.59:18083'
+// EMQX API configuration - requires EMQX_API_URL env var
+const EMQX_API_BASE = process.env.EMQX_API_URL
+if (!EMQX_API_BASE) {
+  console.error('ERROR: EMQX_API_URL environment variable is required')
+  console.error('Example: EMQX_API_URL=http://localhost:18083')
+  process.exit(1)
+}
 
 // EMQX API token cache
 let emqxToken = null

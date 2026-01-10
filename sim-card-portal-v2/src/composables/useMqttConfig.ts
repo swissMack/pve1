@@ -7,10 +7,11 @@ const getMqttBrokerUrl = (): string => {
   if (import.meta.env.VITE_MQTT_BROKER_URL) {
     return import.meta.env.VITE_MQTT_BROKER_URL
   }
-  // Default to WebSocket on same host, port 8083 (EMQX WebSocket port)
+  // Default to WebSocket on same host, configurable port (EMQX WebSocket port)
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   const host = window.location.hostname
-  return `${protocol}//${host}:8083/mqtt`
+  const wsPort = import.meta.env.VITE_MQTT_WS_PORT || '8083'
+  return `${protocol}//${host}:${wsPort}/mqtt`
 }
 
 const BROKER_URL = getMqttBrokerUrl()

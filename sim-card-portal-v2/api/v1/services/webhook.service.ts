@@ -19,8 +19,8 @@ import { logWebhookDelivery, updateWebhookDelivery } from '../middleware/audit-l
 import { getSchemaPrefix, shouldUseSupabase } from '../../lib/db.js';
 import { supabase } from '../../lib/supabase.js';
 
-// Get schema prefix based on environment (empty for Supabase, ${SCHEMA} for local)
-const SCHEMA = getSchemaPrefix();
+// Get schema prefix based on environment (empty for Supabase, ${SCHEMA()} for local)
+function SCHEMA(): string { return getSchemaPrefix(); }
 
 /**
  * Generate event ID
@@ -93,7 +93,7 @@ export class WebhookService {
 
       // Fall back to pg pool
       const result = await this.pool.query<DbWebhook>(`
-        INSERT INTO ${SCHEMA}webhooks (url, events, secret_hash, client_id)
+        INSERT INTO ${SCHEMA()}webhooks (url, events, secret_hash, client_id)
         VALUES ($1, $2, $3, $4)
         RETURNING *
       `, [data.url, data.events, secretHash, clientId]);
@@ -128,7 +128,7 @@ export class WebhookService {
 
     // Fall back to pg pool
     const result = await this.pool.query<DbWebhook>(
-      `SELECT * FROM ${SCHEMA}webhooks WHERE id = $1 AND client_id = $2`,
+      `SELECT * FROM ${SCHEMA()}webhooks WHERE id = $1 AND client_id = $2`,
       [webhookId, clientId]
     );
 
@@ -154,7 +154,7 @@ export class WebhookService {
 
     // Fall back to pg pool
     const result = await this.pool.query<DbWebhook>(
-      `SELECT * FROM ${SCHEMA}webhooks WHERE client_id = $1 ORDER BY created_at DESC`,
+      `SELECT * FROM ${SCHEMA()}webhooks WHERE client_id = $1 ORDER BY created_at DESC`,
       [clientId]
     );
 
@@ -178,7 +178,7 @@ export class WebhookService {
 
     // Fall back to pg pool
     const result = await this.pool.query(
-      `DELETE FROM ${SCHEMA}webhooks WHERE id = $1 AND client_id = $2`,
+      `DELETE FROM ${SCHEMA()}webhooks WHERE id = $1 AND client_id = $2`,
       [webhookId, clientId]
     );
 
@@ -203,7 +203,7 @@ export class WebhookService {
 
     // Fall back to pg pool
     const result = await this.pool.query<DbWebhook>(`
-      SELECT * FROM ${SCHEMA}webhooks
+      SELECT * FROM ${SCHEMA()}webhooks
       WHERE status = 'ACTIVE' AND $1 = ANY(events)
     `, [eventType]);
 
@@ -260,7 +260,7 @@ export class WebhookService {
       }
     } else {
       const result = await this.pool.query<DbWebhook & { secret_hash: string }>(`
-        SELECT * FROM ${SCHEMA}webhooks
+        SELECT * FROM ${SCHEMA()}webhooks
         WHERE status = 'ACTIVE' AND $1 = ANY(events)
       `, [eventType]);
       webhookRows = result.rows;
@@ -357,7 +357,7 @@ export class WebhookService {
             .eq('id', webhook.id);
         } else {
           await this.pool.query(`
-            UPDATE ${SCHEMA}webhooks
+            UPDATE ${SCHEMA()}webhooks
             SET last_delivery_at = NOW(), last_success_at = NOW(), failure_count = 0
             WHERE id = $1
           `, [webhook.id]);
@@ -425,7 +425,7 @@ export class WebhookService {
           .eq('id', webhook.id);
       } else {
         await this.pool.query(`
-          UPDATE ${SCHEMA}webhooks
+          UPDATE ${SCHEMA()}webhooks
           SET last_delivery_at = NOW(), last_failure_at = NOW(), failure_count = failure_count + 1,
               status = CASE WHEN failure_count >= 10 THEN 'FAILED' ELSE status END
           WHERE id = $1
@@ -481,7 +481,7 @@ export class WebhookService {
     } else {
       const result = await this.pool.query<PendingDelivery>(`
         SELECT wd.id, wd.webhook_id, wd.payload, wd.attempt_count
-        FROM ${SCHEMA}webhook_deliveries wd
+        FROM ${SCHEMA()}webhook_deliveries wd
         WHERE wd.status = 'PENDING' AND wd.next_retry_at <= NOW()
         LIMIT 100
       `);
@@ -503,7 +503,7 @@ export class WebhookService {
         }
       } else {
         const webhook = await this.pool.query<DbWebhook>(
-          `SELECT * FROM ${SCHEMA}webhooks WHERE id = $1`,
+          `SELECT * FROM ${SCHEMA()}webhooks WHERE id = $1`,
           [delivery.webhook_id]
         );
         if (webhook.rows.length > 0) {

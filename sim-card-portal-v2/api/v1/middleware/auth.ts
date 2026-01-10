@@ -10,8 +10,8 @@ import type { ApiClient, AuthContext, ErrorResponse } from '../types/provisionin
 import { getSchemaPrefix, shouldUseSupabase } from '../../lib/db.js';
 import { supabase } from '../../lib/supabase.js';
 
-// Get schema prefix based on environment (empty for Supabase, ${SCHEMA} for local)
-const SCHEMA = getSchemaPrefix();
+// Get schema prefix based on environment (empty for Supabase, ${SCHEMA()} for local)
+function SCHEMA(): string { return getSchemaPrefix(); }
 
 // Extend Express Request to include auth context
 declare global {
@@ -181,7 +181,7 @@ export function createAuthMiddleware(pool: Pool) {
           api_key_hash: string;
         }>(`
           SELECT id, name, permissions, rate_limit_override, is_active, api_key_hash
-          FROM ${SCHEMA}api_clients
+          FROM ${SCHEMA()}api_clients
           WHERE api_key_prefix = $1
         `, [prefix]);
         clientRow = result.rows[0] || null;
@@ -245,7 +245,7 @@ export function createAuthMiddleware(pool: Pool) {
           });
       } else {
         pool.query(`
-          UPDATE ${SCHEMA}api_clients
+          UPDATE ${SCHEMA()}api_clients
           SET last_used_at = NOW()
           WHERE id = $1
         `, [client.id]).catch(err => {

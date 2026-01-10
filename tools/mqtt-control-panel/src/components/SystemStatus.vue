@@ -6,10 +6,8 @@ import Tag from 'primevue/tag'
 import ProgressSpinner from 'primevue/progressspinner'
 import Divider from 'primevue/divider'
 
-// Use dynamic hostname so it works from any browser location
-const API_BASE = typeof window !== 'undefined'
-  ? `http://${window.location.hostname}:3003/api`
-  : 'http://localhost:3003/api'
+// Use environment variable or fallback to localhost
+const API_BASE = import.meta.env.VITE_BACKEND_API_URL || 'http://localhost:3003/api'
 
 // State
 const generatorStatus = ref('unknown')

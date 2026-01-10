@@ -1,28 +1,13 @@
-# Frontend Dockerfile - Vue.js with Nginx
-FROM node:20-alpine AS builder
+# Frontend Dockerfile - Pre-built Vue.js with Nginx
+# Build locally with: npm run build (with VITE_* env vars set)
+# Then deploy with docker compose
 
-WORKDIR /app
-
-# Copy package files
-COPY package*.json ./
-
-# Install dependencies (allow postinstall scripts for esbuild)
-RUN npm install
-
-# Copy source code
-COPY . .
-
-# Set environment variables for build
-ENV VITE_USE_API=true
-ENV VITE_WEBSOCKET_URL=ws://localhost:3002/ws
-
-# Build
-RUN npm run build
-
-# Production stage
 FROM nginx:alpine
-COPY --from=builder /app/dist /usr/share/nginx/html
+
+# Copy pre-built dist folder
+COPY dist /usr/share/nginx/html
 COPY docker/nginx.conf /etc/nginx/nginx.conf
+
 EXPOSE 80
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost/ || exit 1

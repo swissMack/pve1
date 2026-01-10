@@ -9,8 +9,8 @@ import type { Pool } from 'pg';
 import { getSchemaPrefix, shouldUseSupabase } from '../../lib/db.js';
 import { supabase } from '../../lib/supabase.js';
 
-// Get schema prefix based on environment (empty for Supabase, ${SCHEMA} for local)
-const SCHEMA = getSchemaPrefix();
+// Get schema prefix based on environment (empty for Supabase, ${SCHEMA()} for local)
+function SCHEMA(): string { return getSchemaPrefix(); }
 
 /**
  * Mask sensitive fields in request body
@@ -103,7 +103,7 @@ export function createAuditLogger(pool: Pool) {
           });
       } else {
         pool.query(`
-          INSERT INTO ${SCHEMA}api_audit_log
+          INSERT INTO ${SCHEMA()}api_audit_log
           (request_id, client_id, client_ip, user_agent, method, endpoint, query_params, request_body_hash, status_code, response_time_ms)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         `, [
@@ -176,7 +176,7 @@ export async function logSimStateChange(
 
     // Fall back to pg pool
     await pool.query(`
-      INSERT INTO ${SCHEMA}sim_audit_log
+      INSERT INTO ${SCHEMA()}sim_audit_log
       (sim_id, iccid, action, previous_status, new_status, reason, notes, initiated_by, client_id, correlation_id, request_id, ip_address, changes)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
     `, [
@@ -244,7 +244,7 @@ export async function logWebhookDelivery(
 
     // Fall back to pg pool
     const result = await pool.query<{ id: number }>(`
-      INSERT INTO ${SCHEMA}webhook_deliveries
+      INSERT INTO ${SCHEMA()}webhook_deliveries
       (event_id, event_type, webhook_id, payload, status, attempt_count, response_code, response_body, response_time_ms, next_retry_at, last_attempt_at)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
       RETURNING id
@@ -304,7 +304,7 @@ export async function updateWebhookDelivery(
 
     // Fall back to pg pool
     await pool.query(`
-      UPDATE ${SCHEMA}webhook_deliveries
+      UPDATE ${SCHEMA()}webhook_deliveries
       SET status = $2, attempt_count = $3, response_code = $4, response_body = $5,
           response_time_ms = $6, next_retry_at = $7, delivered_at = $8, last_attempt_at = NOW()
       WHERE id = $1

@@ -23,8 +23,8 @@ import { logSimStateChange } from '../middleware/audit-logger.js';
 import { getSchemaPrefix, shouldUseSupabase } from '../../lib/db.js';
 import { supabase } from '../../lib/supabase.js';
 
-// Get schema prefix based on environment (empty for Supabase, ${SCHEMA} for local)
-const SCHEMA = getSchemaPrefix();
+// Get schema prefix based on environment (empty for Supabase, ${SCHEMA()} for local)
+function SCHEMA(): string { return getSchemaPrefix(); }
 
 // State transitions map
 const STATE_TRANSITIONS: Record<SimStatus, SimStatus[]> = {
@@ -205,7 +205,7 @@ export class SimService {
       // Fall back to pg pool
       // Check for duplicate ICCID
       const existing = await this.pool.query(
-        `SELECT sim_id FROM ${SCHEMA}provisioned_sims WHERE iccid = $1`,
+        `SELECT sim_id FROM ${SCHEMA()}provisioned_sims WHERE iccid = $1`,
         [data.iccid]
       );
 
@@ -219,7 +219,7 @@ export class SimService {
 
       // Insert SIM
       const result = await this.pool.query<DbProvisionedSim>(`
-        INSERT INTO ${SCHEMA}provisioned_sims (
+        INSERT INTO ${SCHEMA()}provisioned_sims (
           iccid, imsi, msisdn, imei, puk1, puk2, pin1, pin2, ki, opc,
           apn, rate_plan_id, data_limit_bytes, billing_account_id, customer_id,
           status, metadata, activated_at
@@ -311,7 +311,7 @@ export class SimService {
 
     // Fall back to pg pool
     const result = await this.pool.query<DbProvisionedSim>(
-      `SELECT * FROM ${SCHEMA}provisioned_sims WHERE sim_id = $1`,
+      `SELECT * FROM ${SCHEMA()}provisioned_sims WHERE sim_id = $1`,
       [simId]
     );
 
@@ -325,7 +325,7 @@ export class SimService {
       last_updated: string;
     }>(`
       SELECT total_bytes, last_updated
-      FROM ${SCHEMA}usage_cycles
+      FROM ${SCHEMA()}usage_cycles
       WHERE sim_id = $1 AND is_current = true
     `, [simId]);
 
@@ -363,7 +363,7 @@ export class SimService {
 
     // Fall back to pg pool
     const result = await this.pool.query<DbProvisionedSim>(
-      `SELECT * FROM ${SCHEMA}provisioned_sims WHERE iccid = $1`,
+      `SELECT * FROM ${SCHEMA()}provisioned_sims WHERE iccid = $1`,
       [iccid]
     );
 
@@ -389,7 +389,7 @@ export class SimService {
 
     // Fall back to pg pool
     const result = await this.pool.query<DbProvisionedSim>(
-      `SELECT * FROM ${SCHEMA}provisioned_sims WHERE msisdn = $1`,
+      `SELECT * FROM ${SCHEMA()}provisioned_sims WHERE msisdn = $1`,
       [msisdn]
     );
 
@@ -479,7 +479,7 @@ export class SimService {
 
     // Get total count
     const countResult = await this.pool.query<{ count: string }>(
-      `SELECT COUNT(*) as count FROM ${SCHEMA}provisioned_sims ${whereClause}`,
+      `SELECT COUNT(*) as count FROM ${SCHEMA()}provisioned_sims ${whereClause}`,
       values
     );
     const total = parseInt(countResult.rows[0].count, 10);
@@ -491,7 +491,7 @@ export class SimService {
     const offsetParam = paramIndex;
 
     const result = await this.pool.query<DbProvisionedSim>(
-      `SELECT * FROM ${SCHEMA}provisioned_sims ${whereClause}
+      `SELECT * FROM ${SCHEMA()}provisioned_sims ${whereClause}
        ORDER BY created_at DESC LIMIT $${limitParam} OFFSET $${offsetParam}`,
       [...values, limit, offset]
     );
@@ -601,7 +601,7 @@ export class SimService {
     // Fall back to pg pool
     // Get current SIM
     const current = await this.pool.query<DbProvisionedSim>(
-      `SELECT * FROM ${SCHEMA}provisioned_sims WHERE sim_id = $1`,
+      `SELECT * FROM ${SCHEMA()}provisioned_sims WHERE sim_id = $1`,
       [simId]
     );
 
@@ -676,7 +676,7 @@ export class SimService {
     values.push(simId);
 
     const result = await this.pool.query<DbProvisionedSim>(
-      `UPDATE ${SCHEMA}provisioned_sims
+      `UPDATE ${SCHEMA()}provisioned_sims
        SET ${updates.join(', ')}, updated_at = NOW()
        WHERE sim_id = $${paramIndex}
        RETURNING *`,
@@ -765,7 +765,7 @@ export class SimService {
 
     // Fall back to pg pool
     const current = await this.pool.query<DbProvisionedSim>(
-      `SELECT * FROM ${SCHEMA}provisioned_sims WHERE sim_id = $1`,
+      `SELECT * FROM ${SCHEMA()}provisioned_sims WHERE sim_id = $1`,
       [simId]
     );
 
@@ -784,7 +784,7 @@ export class SimService {
     }
 
     const result = await this.pool.query<DbProvisionedSim>(
-      `UPDATE ${SCHEMA}provisioned_sims
+      `UPDATE ${SCHEMA()}provisioned_sims
        SET status = 'ACTIVE', activated_at = NOW(), updated_at = NOW()
        WHERE sim_id = $1
        RETURNING *`,
@@ -880,7 +880,7 @@ export class SimService {
 
     // Fall back to pg pool
     const current = await this.pool.query<DbProvisionedSim>(
-      `SELECT * FROM ${SCHEMA}provisioned_sims WHERE sim_id = $1`,
+      `SELECT * FROM ${SCHEMA()}provisioned_sims WHERE sim_id = $1`,
       [simId]
     );
 
@@ -899,7 +899,7 @@ export class SimService {
     }
 
     const result = await this.pool.query<DbProvisionedSim>(
-      `UPDATE ${SCHEMA}provisioned_sims
+      `UPDATE ${SCHEMA()}provisioned_sims
        SET status = 'INACTIVE', deactivated_at = NOW(), updated_at = NOW()
        WHERE sim_id = $1
        RETURNING *`,
@@ -999,7 +999,7 @@ export class SimService {
 
     // Fall back to pg pool
     const current = await this.pool.query<DbProvisionedSim>(
-      `SELECT * FROM ${SCHEMA}provisioned_sims WHERE sim_id = $1`,
+      `SELECT * FROM ${SCHEMA()}provisioned_sims WHERE sim_id = $1`,
       [simId]
     );
 
@@ -1018,7 +1018,7 @@ export class SimService {
     }
 
     const result = await this.pool.query<DbProvisionedSim>(
-      `UPDATE ${SCHEMA}provisioned_sims
+      `UPDATE ${SCHEMA()}provisioned_sims
        SET status = 'BLOCKED', previous_status = $2, block_reason = $3, block_notes = $4,
            blocked_at = NOW(), blocked_by = 'API', updated_at = NOW()
        WHERE sim_id = $1
@@ -1122,7 +1122,7 @@ export class SimService {
 
     // Fall back to pg pool
     const current = await this.pool.query<DbProvisionedSim>(
-      `SELECT * FROM ${SCHEMA}provisioned_sims WHERE sim_id = $1`,
+      `SELECT * FROM ${SCHEMA()}provisioned_sims WHERE sim_id = $1`,
       [simId]
     );
 
@@ -1144,7 +1144,7 @@ export class SimService {
     const newStatus = sim.previous_status || 'INACTIVE';
 
     const result = await this.pool.query<DbProvisionedSim>(
-      `UPDATE ${SCHEMA}provisioned_sims
+      `UPDATE ${SCHEMA()}provisioned_sims
        SET status = $2, previous_status = NULL, block_reason = NULL, block_notes = NULL,
            blocked_at = NULL, blocked_by = NULL, updated_at = NOW()
        WHERE sim_id = $1

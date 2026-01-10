@@ -82,11 +82,13 @@ class WebSocketService {
     // Build dynamic WebSocket URL based on current host
     if (import.meta.env.VITE_WEBSOCKET_URL) {
       this.url = import.meta.env.VITE_WEBSOCKET_URL;
+      console.log('[WebSocket] Using env URL:', this.url);
     } else {
       // Use same host as the page, with ws/wss protocol
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const host = window.location.host;
       this.url = `${protocol}//${host}/ws`;
+      console.log('[WebSocket] Using dynamic URL:', this.url);
     }
   }
 
@@ -98,10 +100,13 @@ class WebSocketService {
       this.url = url;
     }
 
+    console.log('[WebSocket] Connecting to:', this.url);
+
     return new Promise((resolve, reject) => {
       try {
         this.isIntentionalClose = false;
         this.socket = new WebSocket(this.url);
+        console.log('[WebSocket] WebSocket object created');
 
         this.socket.onopen = () => {
           console.log('WebSocket connected to MQTT Bridge');

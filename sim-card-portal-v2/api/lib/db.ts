@@ -22,6 +22,13 @@ export { supabase, isSupabaseConfigured }
 export type DbClient = Pool | typeof supabase
 
 /**
+ * Check if we should use public schema (Supabase mode)
+ */
+export function usePublicSchema(): boolean {
+  return process.env.USE_PUBLIC_SCHEMA === 'true'
+}
+
+/**
  * Determine if we should use Supabase or pg Pool
  */
 export function shouldUseSupabase(): boolean {
@@ -30,10 +37,11 @@ export function shouldUseSupabase(): boolean {
 
 /**
  * Get the appropriate schema prefix for SQL queries
- * Returns empty string for Supabase (public schema), or the schema prefix for local
+ * Returns empty string for public schema (Supabase/Proxmox), or the schema prefix for local dev
  */
 export function getSchemaPrefix(): string {
-  return shouldUseSupabase() ? '' : '"sim-card-portal-v2".'
+  // Use public schema if Supabase is configured OR USE_PUBLIC_SCHEMA=true
+  return (shouldUseSupabase() || usePublicSchema()) ? '' : '"sim-card-portal-v2".'
 }
 
 /**
@@ -42,8 +50,8 @@ export function getSchemaPrefix(): string {
  * Note: Cast to 'public' for TypeScript compatibility with generated types
  */
 export function getSchemaName(): 'public' {
-  // We return 'public' type for TypeScript, but actual value may be 'sim-card-portal-v2'
-  return (shouldUseSupabase() ? 'public' : 'sim-card-portal-v2') as 'public'
+  // Use public schema if Supabase is configured OR USE_PUBLIC_SCHEMA=true
+  return ((shouldUseSupabase() || usePublicSchema()) ? 'public' : 'sim-card-portal-v2') as 'public'
 }
 
 /**

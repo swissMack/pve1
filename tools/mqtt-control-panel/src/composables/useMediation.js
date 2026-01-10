@@ -8,9 +8,9 @@ import { analyticsService } from '../services/analyticsService.js'
 export function useMediation() {
   // ============ Connection Config ============
   const config = ref({
-    portalUrl: 'http://localhost:3001',
-    analyticsUrl: 'http://192.168.1.59:9010',
-    apiKey: '',
+    portalUrl: import.meta.env.VITE_PORTAL_API_URL || 'http://localhost:3001',
+    analyticsUrl: import.meta.env.VITE_ANALYTICS_API_URL || 'http://localhost:9010',
+    apiKey: import.meta.env.VITE_PORTAL_API_KEY || '',
     tenant: 'test-tenant',
     customer: 'test-customer'
   })

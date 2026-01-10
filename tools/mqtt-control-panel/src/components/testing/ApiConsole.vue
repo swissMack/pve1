@@ -11,6 +11,8 @@ const testOptions = [
   { label: 'SIM Lookup by ICCID', value: 'sim-lookup' }
 ]
 
+const portalApiUrl = import.meta.env.VITE_PORTAL_API_URL || 'http://localhost:3001'
+
 const selectedTest = ref('sim-lookup')
 const iccidInput = ref('')
 const loading = ref(false)
@@ -122,7 +124,7 @@ const clearResults = () => {
             <strong>Troubleshooting:</strong>
             <ul class="mt-2 pl-4">
               <li v-if="error.code === 'NOT_FOUND'">Verify the ICCID exists in the system</li>
-              <li v-else>Check that the API server is running at http://192.168.1.59:3001</li>
+              <li v-else>Check that the API server is running at {{ portalApiUrl }}</li>
               <li>Verify your API key is valid</li>
             </ul>
           </div>

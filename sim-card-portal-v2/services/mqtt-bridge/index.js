@@ -5,6 +5,9 @@
  * persists to database, and broadcasts to frontend via WebSocket.
  */
 
+// Load environment variables from .env file
+require('dotenv').config();
+
 const { config, validateConfig, logConfig } = require('./config');
 const mqttClient = require('./mqttClient');
 const dbService = require('./dbService');

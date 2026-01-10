@@ -52,6 +52,16 @@ const currentHostname = computed(() => {
   return typeof window !== 'undefined' ? window.location.hostname : 'localhost'
 })
 
+// Service URLs from environment variables
+const serviceUrls = {
+  grafana: import.meta.env.VITE_GRAFANA_URL || 'http://localhost:3000',
+  grafanaDashboard: (import.meta.env.VITE_GRAFANA_URL || 'http://localhost:3000') + '/d/b730b349-e24f-4a53-a7c3-19012b906123/sim-portal-sensors?orgId=1',
+  influxdb: import.meta.env.VITE_INFLUXDB_URL || 'http://localhost:8086',
+  emqxDashboard: (import.meta.env.VITE_EMQX_DASHBOARD_URL || 'http://localhost:18083') + '/#/clients',
+  portalApi: import.meta.env.VITE_PORTAL_API_URL || 'http://localhost:3001',
+  mqttBroker: import.meta.env.VITE_MQTT_BROKER_URL || 'ws://localhost:8083/mqtt'
+}
+
 // Event handlers
 function handleSetSensor(deviceId, field, value) {
   setSensorValue(deviceId, field, value)
@@ -174,15 +184,15 @@ onMounted(() => {
             <i class="pi pi-info-circle"></i>
             <span>Info</span>
           </button>
-          <a href="http://192.168.1.199:3000/d/b730b349-e24f-4a53-a7c3-19012b906123/sim-portal-sensors?orgId=1" target="_blank" class="service-tab auto-login" title="SIM Portal Sensors Dashboard (no login required)">
+          <a :href="serviceUrls.grafanaDashboard" target="_blank" class="service-tab auto-login" title="SIM Portal Sensors Dashboard (no login required)">
             <i class="pi pi-chart-line"></i>
             <span>Grafana</span>
           </a>
-          <a href="http://192.168.1.199:8086" target="_blank" class="service-tab" title="InfluxDB (admin/adminpassword)">
+          <a :href="serviceUrls.influxdb" target="_blank" class="service-tab" title="InfluxDB (admin/adminpassword)">
             <i class="pi pi-database"></i>
             <span>InfluxDB</span>
           </a>
-          <a href="http://192.168.1.199:18083/#/clients" target="_blank" class="service-tab" title="EMQX Dashboard (admin/public)">
+          <a :href="serviceUrls.emqxDashboard" target="_blank" class="service-tab" title="EMQX Dashboard (admin/public)">
             <i class="pi pi-sitemap"></i>
             <span>EMQX</span>
           </a>
@@ -485,8 +495,8 @@ node index.js</pre>
               <h4><i class="pi pi-chart-line"></i> Grafana</h4>
               <Tag value="No Login Required" severity="success" class="auto-tag" />
               <p>Visualization and alerting platform</p>
-              <code>http://192.168.1.199:3000</code>
-              <a href="http://192.168.1.199:3000/d/b730b349-e24f-4a53-a7c3-19012b906123/sim-portal-sensors?orgId=1" target="_blank" class="service-link auto">
+              <code>{{ serviceUrls.grafana }}</code>
+              <a :href="serviceUrls.grafanaDashboard" target="_blank" class="service-link auto">
                 <i class="pi pi-external-link"></i> Open Sensors Dashboard
               </a>
             </div>
@@ -505,8 +515,8 @@ node index.js</pre>
                 <span class="cred-label">Bucket:</span>
                 <span class="cred-value">mqtt_messages</span>
               </div>
-              <code>http://192.168.1.199:8086</code>
-              <a href="http://192.168.1.199:8086" target="_blank" class="service-link">
+              <code>{{ serviceUrls.influxdb }}</code>
+              <a :href="serviceUrls.influxdb" target="_blank" class="service-link">
                 <i class="pi pi-external-link"></i> Open Data Explorer
               </a>
             </div>
@@ -517,9 +527,9 @@ node index.js</pre>
                 <span class="cred-label">Login:</span>
                 <span class="cred-value">admin / public</span>
               </div>
-              <code>mqtt://192.168.1.199:1883</code>
-              <code>ws://192.168.1.199:8083/mqtt</code>
-              <a href="http://192.168.1.199:18083/#/clients" target="_blank" class="service-link">
+              <code>{{ serviceUrls.mqttBroker.replace('ws://', 'mqtt://').replace(':8083/mqtt', ':1883') }}</code>
+              <code>{{ serviceUrls.mqttBroker }}</code>
+              <a :href="serviceUrls.emqxDashboard" target="_blank" class="service-link">
                 <i class="pi pi-external-link"></i> Open Dashboard
               </a>
             </div>

@@ -1,10 +1,8 @@
 import { ref, reactive, onUnmounted } from 'vue'
 import mqtt from 'mqtt'
 
-// Use dynamic hostname so it works from any browser location
-const defaultBrokerUrl = typeof window !== 'undefined'
-  ? `ws://${window.location.hostname}:8083/mqtt`
-  : 'ws://localhost:8083/mqtt'
+// Use environment variable or fallback to Proxmox EMQX
+const defaultBrokerUrl = import.meta.env.VITE_MQTT_BROKER_URL || 'ws://localhost:8083/mqtt'
 
 export function useMqtt(brokerUrl = defaultBrokerUrl) {
   const client = ref(null)

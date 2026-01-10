@@ -8,7 +8,10 @@ const { createClient } = require('@supabase/supabase-js');
 const { config } = require('./config');
 
 // Schema name used in the database (for PostgreSQL pool)
-const SCHEMA = 'sim-card-portal-v2';
+// Uses 'public' for Supabase/Proxmox, 'sim-card-portal-v2' for local dev
+function getSchema() {
+  return process.env.USE_PUBLIC_SCHEMA === 'true' ? 'public' : 'sim-card-portal-v2';
+}
 
 // Supabase client (initialized lazily)
 let supabase = null;
@@ -127,7 +130,7 @@ class DbService {
 
     // Fall back to PostgreSQL pool
     const query = `
-      INSERT INTO "${SCHEMA}".device_sensor_history (
+      INSERT INTO "${getSchema()}".device_sensor_history (
         device_id, temperature, humidity, light,
         battery_level, signal_strength, recorded_at, metadata
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -191,7 +194,7 @@ class DbService {
 
     // Fall back to PostgreSQL pool
     const query = `
-      INSERT INTO "${SCHEMA}".device_location_history (
+      INSERT INTO "${getSchema()}".device_location_history (
         device_id, latitude, longitude, altitude,
         accuracy, speed, heading, location_source,
         battery_level, signal_strength, recorded_at, metadata
@@ -298,7 +301,7 @@ class DbService {
     }
 
     const query = `
-      UPDATE "${SCHEMA}".devices
+      UPDATE "${getSchema()}".devices
       SET ${updates.join(', ')}
       WHERE id = $1
     `;
@@ -354,7 +357,7 @@ class DbService {
 
     // Fall back to PostgreSQL pool
     const query = `
-      UPDATE "${SCHEMA}".devices
+      UPDATE "${getSchema()}".devices
       SET
         last_seen = NOW(),
         status = 'active',
@@ -405,7 +408,7 @@ class DbService {
     }
 
     // Fall back to PostgreSQL pool
-    const query = `SELECT id FROM "${SCHEMA}".devices WHERE id = $1`;
+    const query = `SELECT id FROM "${getSchema()}".devices WHERE id = $1`;
 
     try {
       const result = await this.pool.query(query, [deviceId]);
@@ -437,7 +440,7 @@ class DbService {
     }
 
     // Fall back to PostgreSQL pool
-    const query = `SELECT * FROM "${SCHEMA}".devices WHERE id = $1`;
+    const query = `SELECT * FROM "${getSchema()}".devices WHERE id = $1`;
 
     try {
       const result = await this.pool.query(query, [deviceId]);

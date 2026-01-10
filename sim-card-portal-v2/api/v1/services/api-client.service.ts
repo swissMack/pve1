@@ -8,7 +8,7 @@ import { createHash, randomBytes } from 'crypto';
 import { getSchemaPrefix, shouldUseSupabase } from '../../lib/db.js';
 import { supabase } from '../../lib/supabase.js';
 
-const SCHEMA = getSchemaPrefix();
+function SCHEMA(): string { return getSchemaPrefix(); }
 
 export interface ApiClientRecord {
   id: string;
@@ -86,7 +86,7 @@ export class ApiClientService {
 
     const result = await this.pool.query(`
       SELECT id, name, description, api_key_prefix, permissions, is_active, last_used_at, created_at, updated_at
-      FROM ${SCHEMA}api_clients
+      FROM ${SCHEMA()}api_clients
       ORDER BY created_at DESC
     `);
 
@@ -147,7 +147,7 @@ export class ApiClientService {
     }
 
     const result = await this.pool.query(`
-      INSERT INTO ${SCHEMA}api_clients (
+      INSERT INTO ${SCHEMA()}api_clients (
         name,
         description,
         api_key_hash,
@@ -224,7 +224,7 @@ export class ApiClientService {
 
     // First get current status
     const currentResult = await this.pool.query(`
-      SELECT is_active FROM ${SCHEMA}api_clients WHERE id = $1
+      SELECT is_active FROM ${SCHEMA()}api_clients WHERE id = $1
     `, [clientId]);
 
     if (currentResult.rows.length === 0) return null;
@@ -232,7 +232,7 @@ export class ApiClientService {
     const newStatus = !currentResult.rows[0].is_active;
 
     const result = await this.pool.query(`
-      UPDATE ${SCHEMA}api_clients
+      UPDATE ${SCHEMA()}api_clients
       SET is_active = $1, updated_at = NOW()
       WHERE id = $2
       RETURNING id, name, description, api_key_prefix, permissions, is_active, last_used_at, created_at, updated_at
@@ -268,7 +268,7 @@ export class ApiClientService {
     }
 
     const result = await this.pool.query(`
-      DELETE FROM ${SCHEMA}api_clients WHERE id = $1
+      DELETE FROM ${SCHEMA()}api_clients WHERE id = $1
     `, [clientId]);
 
     return result.rowCount !== null && result.rowCount > 0;
@@ -298,7 +298,7 @@ export class ApiClientService {
     }
 
     const result = await this.pool.query(`
-      UPDATE ${SCHEMA}api_clients
+      UPDATE ${SCHEMA()}api_clients
       SET api_key_hash = $1, api_key_prefix = $2, updated_at = NOW()
       WHERE id = $3
       RETURNING id

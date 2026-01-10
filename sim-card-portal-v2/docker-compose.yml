@@ -29,6 +29,9 @@ services:
       context: .
       dockerfile: docker/Dockerfile.frontend
     container_name: simcard-portal-frontend
+    privileged: true
+    security_opt:
+      - label=disable
     ports:
       - "8080:80"
     depends_on:

@@ -3,6 +3,7 @@
  * Provides container control and EMQX status endpoints
  */
 
+import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
 import { exec } from 'child_process'
@@ -25,7 +26,9 @@ let messageStats = {
 }
 
 function initMqttClient() {
-  mqttClient = mqtt.connect('mqtt://localhost:1883', {
+  // Connect to EMQX on Proxmox
+  const brokerUrl = process.env.MQTT_BROKER_URL || 'mqtt://192.168.1.59:1883'
+  mqttClient = mqtt.connect(brokerUrl, {
     clientId: `control-panel-monitor-${Date.now()}`,
     clean: true
   })
@@ -110,8 +113,25 @@ const DOCKER_DIR = process.env.DOCKER_DIR || (
     : '/root/MQTTServer/docker'  // Linux/Proxmox path
 )
 
+// Check if Docker is available
+let dockerAvailable = false
+async function checkDockerAvailable() {
+  try {
+    await execAsync('docker info')
+    dockerAvailable = true
+    console.log('Docker is available for container control')
+  } catch {
+    dockerAvailable = false
+    console.log('Docker not available - container control disabled (generator running on Proxmox)')
+  }
+}
+checkDockerAvailable()
+
 // Execute docker compose command
 async function dockerCompose(command) {
+  if (!dockerAvailable) {
+    throw new Error('Docker not available locally - generator running on Proxmox')
+  }
   const { stdout, stderr } = await execAsync(
     `docker compose ${command}`,
     { cwd: DOCKER_DIR }
@@ -121,6 +141,9 @@ async function dockerCompose(command) {
 
 // Get container status
 async function getContainerStatus(containerName) {
+  if (!dockerAvailable) {
+    return 'remote'  // Indicates running on remote server
+  }
   try {
     const { stdout } = await execAsync(
       `docker inspect --format='{{.State.Status}}' ${containerName}`
@@ -133,6 +156,9 @@ async function getContainerStatus(containerName) {
 
 // Get container logs
 async function getContainerLogs(containerName, lines = 20) {
+  if (!dockerAvailable) {
+    return 'Logs not available - generator running on Proxmox server'
+  }
   try {
     const { stdout } = await execAsync(
       `docker logs ${containerName} --tail ${lines} 2>&1`
@@ -195,6 +221,9 @@ app.post('/api/generator/restart', async (req, res) => {
 
 // ============ EMQX Status Endpoints ============
 
+// EMQX API configuration - use Proxmox server
+const EMQX_API_BASE = process.env.EMQX_API_URL || 'http://192.168.1.59:18083'
+
 // EMQX API token cache
 let emqxToken = null
 let emqxTokenExpiry = 0
@@ -205,7 +234,7 @@ async function getEmqxToken() {
     return emqxToken
   }
 
-  const response = await fetch('http://localhost:18083/api/v5/login', {
+  const response = await fetch(`${EMQX_API_BASE}/api/v5/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username: 'admin', password: 'public' })
@@ -223,7 +252,7 @@ async function getEmqxToken() {
 // Helper to make authenticated EMQX API calls
 async function emqxFetch(path) {
   const token = await getEmqxToken()
-  const response = await fetch(`http://localhost:18083/api/v5${path}`, {
+  const response = await fetch(`${EMQX_API_BASE}/api/v5${path}`, {
     headers: { 'Authorization': `Bearer ${token}` }
   })
   if (!response.ok) {

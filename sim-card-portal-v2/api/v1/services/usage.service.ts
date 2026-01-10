@@ -19,8 +19,10 @@ import { formatBytes } from './sim.service.js';
 import { getSchemaPrefix, shouldUseSupabase } from '../../lib/db.js';
 import { supabase } from '../../lib/supabase.js';
 
-// Get schema prefix based on environment (empty for Supabase, ${SCHEMA} for local)
-const SCHEMA = getSchemaPrefix();
+// Get schema prefix lazily at runtime (ES modules evaluate before dotenv loads)
+function SCHEMA(): string {
+  return getSchemaPrefix();
+}
 
 export class UsageService {
   constructor(private pool: Pool) {}
@@ -101,7 +103,7 @@ export class UsageService {
       // Fall back to pg pool
       // Check for duplicate record
       const existing = await this.pool.query(
-        `SELECT id, processed_at FROM ${SCHEMA}usage_records WHERE record_id = $1`,
+        `SELECT id, processed_at FROM ${SCHEMA()}usage_records WHERE record_id = $1`,
         [data.recordId]
       );
 
@@ -119,7 +121,7 @@ export class UsageService {
 
       // Get SIM by ICCID
       const simResult = await this.pool.query<{ sim_id: string }>(
-        `SELECT sim_id FROM ${SCHEMA}provisioned_sims WHERE iccid = $1`,
+        `SELECT sim_id FROM ${SCHEMA()}provisioned_sims WHERE iccid = $1`,
         [data.iccid]
       );
 
@@ -127,7 +129,7 @@ export class UsageService {
 
       // Insert usage record
       const result = await this.pool.query<{ processed_at: string }>(`
-        INSERT INTO ${SCHEMA}usage_records
+        INSERT INTO ${SCHEMA()}usage_records
         (record_id, iccid, sim_id, period_start, period_end,
          data_upload_bytes, data_download_bytes, total_bytes, sms_count, voice_seconds,
          source, status)
@@ -232,7 +234,7 @@ export class UsageService {
           // Fall back to pg pool
           // Check for duplicate
           const existing = await this.pool.query(
-            `SELECT id FROM ${SCHEMA}usage_records WHERE record_id = $1`,
+            `SELECT id FROM ${SCHEMA()}usage_records WHERE record_id = $1`,
             [record.recordId]
           );
 
@@ -244,7 +246,7 @@ export class UsageService {
 
           // Get SIM by ICCID
           const simResult = await this.pool.query<{ sim_id: string }>(
-            `SELECT sim_id FROM ${SCHEMA}provisioned_sims WHERE iccid = $1`,
+            `SELECT sim_id FROM ${SCHEMA()}provisioned_sims WHERE iccid = $1`,
             [record.iccid]
           );
 
@@ -252,7 +254,7 @@ export class UsageService {
 
           // Insert record
           await this.pool.query(`
-            INSERT INTO ${SCHEMA}usage_records
+            INSERT INTO ${SCHEMA()}usage_records
             (record_id, iccid, sim_id, period_start, period_end,
              data_upload_bytes, data_download_bytes, total_bytes, sms_count, voice_seconds,
              source, batch_id, status)
@@ -364,7 +366,7 @@ export class UsageService {
     // Fall back to pg pool
     // Try to update existing current cycle
     const result = await this.pool.query(`
-      UPDATE ${SCHEMA}usage_cycles
+      UPDATE ${SCHEMA()}usage_cycles
       SET
         total_upload_bytes = total_upload_bytes + $2,
         total_download_bytes = total_download_bytes + $3,
@@ -391,7 +393,7 @@ export class UsageService {
       const cycleEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
       await this.pool.query(`
-        INSERT INTO ${SCHEMA}usage_cycles
+        INSERT INTO ${SCHEMA()}usage_cycles
         (sim_id, iccid, cycle_id, cycle_start, cycle_end,
          total_upload_bytes, total_download_bytes, total_bytes, sms_count, voice_seconds,
          is_current)
@@ -516,7 +518,7 @@ export class UsageService {
     // Fall back to pg pool
     // Get SIM by ICCID
     const simResult = await this.pool.query<{ sim_id: string }>(
-      `SELECT sim_id FROM ${SCHEMA}provisioned_sims WHERE iccid = $1`,
+      `SELECT sim_id FROM ${SCHEMA()}provisioned_sims WHERE iccid = $1`,
       [data.iccid]
     );
 
@@ -532,7 +534,7 @@ export class UsageService {
 
     // Get current cycle data for archiving
     const currentCycle = await this.pool.query<DbUsageCycle>(`
-      SELECT * FROM ${SCHEMA}usage_cycles
+      SELECT * FROM ${SCHEMA()}usage_cycles
       WHERE sim_id = $1 AND is_current = true
     `, [simId]);
 
@@ -551,7 +553,7 @@ export class UsageService {
       };
 
       await this.pool.query(`
-        UPDATE ${SCHEMA}usage_cycles
+        UPDATE ${SCHEMA()}usage_cycles
         SET is_current = false, archived_at = NOW(), final_usage = $2
         WHERE id = $1
       `, [cycle.id, JSON.stringify(finalUsage)]);
@@ -564,7 +566,7 @@ export class UsageService {
 
     // Create new cycle
     await this.pool.query(`
-      INSERT INTO ${SCHEMA}usage_cycles
+      INSERT INTO ${SCHEMA()}usage_cycles
       (sim_id, iccid, cycle_id, cycle_start, cycle_end, is_current)
       VALUES ($1, $2, $3, $4, $5, true)
       ON CONFLICT (sim_id, cycle_id) DO UPDATE SET
@@ -706,7 +708,7 @@ export class UsageService {
     // Fall back to pg pool
     // Get SIM details
     const simResult = await this.pool.query<{ sim_id: string; iccid: string; data_limit_bytes: number | null }>(
-      `SELECT sim_id, iccid, data_limit_bytes FROM ${SCHEMA}provisioned_sims WHERE sim_id = $1`,
+      `SELECT sim_id, iccid, data_limit_bytes FROM ${SCHEMA()}provisioned_sims WHERE sim_id = $1`,
       [simId]
     );
 
@@ -725,10 +727,10 @@ export class UsageService {
     let cycleParams: any[];
 
     if (cycle === 'current') {
-      cycleQuery = `SELECT * FROM ${SCHEMA}usage_cycles WHERE sim_id = $1 AND is_current = true`;
+      cycleQuery = `SELECT * FROM ${SCHEMA()}usage_cycles WHERE sim_id = $1 AND is_current = true`;
       cycleParams = [simId];
     } else {
-      cycleQuery = `SELECT * FROM ${SCHEMA}usage_cycles WHERE sim_id = $1 AND cycle_id = $2`;
+      cycleQuery = `SELECT * FROM ${SCHEMA()}usage_cycles WHERE sim_id = $1 AND cycle_id = $2`;
       cycleParams = [simId, cycle];
     }
 
@@ -839,7 +841,7 @@ export class UsageService {
 
     // Fall back to pg pool
     const result = await this.pool.query<DbUsageCycle>(`
-      SELECT * FROM ${SCHEMA}usage_cycles
+      SELECT * FROM ${SCHEMA()}usage_cycles
       WHERE sim_id = $1
       ORDER BY cycle_start DESC
       LIMIT $2

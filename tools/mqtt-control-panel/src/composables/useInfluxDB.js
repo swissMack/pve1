@@ -1,11 +1,9 @@
 import { ref, reactive, onUnmounted } from 'vue'
 
-// Use dynamic hostname so it works from any browser location
-const INFLUXDB_URL = typeof window !== 'undefined'
-  ? `http://${window.location.hostname}:8086`
-  : 'http://localhost:8086'
-const INFLUXDB_TOKEN = 'mqtt-influxdb-token'
-const INFLUXDB_ORG = 'mqtt-org'
+// Use environment variables for InfluxDB configuration
+const INFLUXDB_URL = import.meta.env.VITE_INFLUXDB_URL || 'http://localhost:8086'
+const INFLUXDB_TOKEN = import.meta.env.VITE_INFLUXDB_TOKEN || 'mqtt-influxdb-token'
+const INFLUXDB_ORG = import.meta.env.VITE_INFLUXDB_ORG || 'mqtt-org'
 
 export function useInfluxDB() {
   const loading = ref(false)

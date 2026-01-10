@@ -9,8 +9,8 @@ import type { ErrorResponse, RateLimitConfig, DEFAULT_RATE_LIMITS } from '../typ
 import { getSchemaPrefix, shouldUseSupabase } from '../../lib/db.js';
 import { supabase } from '../../lib/supabase.js';
 
-// Get schema prefix based on environment (empty for Supabase, ${SCHEMA} for local)
-const SCHEMA = getSchemaPrefix();
+// Get schema prefix based on environment (empty for Supabase, ${SCHEMA()} for local)
+function SCHEMA(): string { return getSchemaPrefix(); }
 
 // Rate limit configuration
 const RATE_LIMITS: RateLimitConfig = {
@@ -106,7 +106,7 @@ export function createRateLimiter(pool: Pool) {
         } else {
           // Fall back to pg pool
           const result = await pool.query<{ request_count: number }>(`
-            INSERT INTO ${SCHEMA}rate_limit_buckets (client_id, endpoint_category, window_start, request_count)
+            INSERT INTO ${SCHEMA()}rate_limit_buckets (client_id, endpoint_category, window_start, request_count)
             VALUES ($1, $2, $3, 1)
             ON CONFLICT (client_id, endpoint_category, window_start)
             DO UPDATE SET request_count = rate_limit_buckets.request_count + 1
@@ -220,7 +220,7 @@ export async function getRateLimitStatus(
         // Fall back to pg pool
         const dbResult = await pool.query<{ request_count: number }>(`
           SELECT request_count
-          FROM ${SCHEMA}rate_limit_buckets
+          FROM ${SCHEMA()}rate_limit_buckets
           WHERE client_id = $1 AND endpoint_category = $2 AND window_start = $3
         `, [clientId, category, windowStart]);
 

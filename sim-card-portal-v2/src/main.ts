@@ -29,9 +29,7 @@ app.mount('#app')
 
 // Initialize WebSocket connection for real-time updates (non-blocking)
 // Connection will be established in the background
-const wsUrl = import.meta.env.VITE_WEBSOCKET_URL
-if (wsUrl) {
-  websocketService.connect(wsUrl).catch((err) => {
-    console.warn('WebSocket connection failed (real-time updates unavailable):', err.message)
-  })
-}
+// If VITE_WEBSOCKET_URL is set, use it; otherwise websocketService uses dynamic URL based on current host
+websocketService.connect().catch((err) => {
+  console.warn('WebSocket connection failed (real-time updates unavailable):', err.message)
+})

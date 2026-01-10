@@ -117,3 +117,4 @@ grafana.db
 # Requirements document (source file)
 # =============================================================================
 *.docx
+*.pid

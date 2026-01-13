@@ -1052,6 +1052,110 @@ app.post("/api/settings/currency", async (req, res) => {
   }
 })
 
+// GET /api/settings/llm - Get LLM configuration
+app.get("/api/settings/llm", async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT key, value FROM " + SCHEMA + "app_settings WHERE key IN ('llm_api_key', 'llm_provider', 'llm_enabled')"
+    )
+
+    const settings = {}
+    for (const row of result.rows) {
+      // JSONB values from PostgreSQL are already parsed by pg driver
+      settings[row.key] = row.value
+    }
+
+    // Mask the API key if present
+    let maskedKey = null
+    if (settings.llm_api_key) {
+      const key = settings.llm_api_key
+      if (key.length > 8) {
+        maskedKey = key.slice(0, 7) + '*'.repeat(Math.min(20, key.length - 11)) + key.slice(-4)
+      } else {
+        maskedKey = '*'.repeat(key.length)
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        hasApiKey: !!settings.llm_api_key,
+        maskedKey,
+        provider: settings.llm_provider || 'Anthropic',
+        enabled: settings.llm_enabled || false
+      }
+    })
+  } catch (error) {
+    console.error("Error getting LLM settings:", error)
+    res.json({
+      success: true,
+      data: { hasApiKey: false, maskedKey: null, provider: 'Anthropic', enabled: false }
+    })
+  }
+})
+
+// POST /api/settings/llm - Save LLM configuration (API key)
+app.post("/api/settings/llm", async (req, res) => {
+  try {
+    const { apiKey, provider = 'Anthropic', enabled } = req.body
+
+    if (apiKey !== undefined) {
+      // Save API key
+      await pool.query(
+        "INSERT INTO " + SCHEMA + "app_settings (key, value, updated_at) VALUES ($1, $2, NOW()) " +
+        "ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()",
+        ["llm_api_key", JSON.stringify(apiKey)]
+      )
+
+      // Update the in-memory Anthropic client
+      if (apiKey && apiKey.startsWith('sk-ant-')) {
+        try {
+          const Anthropic = (await import('@anthropic-ai/sdk')).default
+          anthropic = new Anthropic({ apiKey })
+          console.log('Anthropic client updated with new API key')
+        } catch (e) {
+          console.error('Failed to update Anthropic client:', e.message)
+        }
+      }
+    }
+
+    if (provider !== undefined) {
+      await pool.query(
+        "INSERT INTO " + SCHEMA + "app_settings (key, value, updated_at) VALUES ($1, $2, NOW()) " +
+        "ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()",
+        ["llm_provider", JSON.stringify(provider)]
+      )
+    }
+
+    if (enabled !== undefined) {
+      await pool.query(
+        "INSERT INTO " + SCHEMA + "app_settings (key, value, updated_at) VALUES ($1, $2, NOW()) " +
+        "ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()",
+        ["llm_enabled", JSON.stringify(enabled)]
+      )
+    }
+
+    res.json({ success: true, message: "LLM settings saved" })
+  } catch (error) {
+    console.error("Error saving LLM settings:", error)
+    res.status(500).json({ success: false, error: "Failed to save LLM settings" })
+  }
+})
+
+// DELETE /api/settings/llm - Delete LLM API key
+app.delete("/api/settings/llm", async (req, res) => {
+  try {
+    await pool.query(
+      "DELETE FROM " + SCHEMA + "app_settings WHERE key = 'llm_api_key'"
+    )
+    anthropic = null
+    res.json({ success: true, message: "API key deleted" })
+  } catch (error) {
+    console.error("Error deleting LLM API key:", error)
+    res.status(500).json({ success: false, error: "Failed to delete API key" })
+  }
+})
+
 // GET /api/consumption/usage-details - Get detailed usage records per IMSI
 app.get('/api/consumption/usage-details', async (req, res) => {
   try {

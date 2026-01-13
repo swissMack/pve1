@@ -9,6 +9,9 @@ import UserSettings from './UserSettings.vue'
 import AboutPage from './AboutPage.vue'
 import AskBobPane from './consumption/AskBobPane.vue'
 
+// API Base URL
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
 // User type definition
 interface User {
   username: string
@@ -50,9 +53,20 @@ const dateRange = ref({
   end: new Date().toISOString().split('T')[0]
 })
 
-const loadLLMEnabled = () => {
-  const stored = localStorage.getItem('sim-portal-llm-enabled')
-  llmEnabled.value = stored === 'true'
+const loadLLMEnabled = async () => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/settings/llm`)
+    const result = await response.json()
+    if (result.success) {
+      llmEnabled.value = result.data.enabled || false
+      // Also sync to localStorage for backward compatibility
+      localStorage.setItem('sim-portal-llm-enabled', String(llmEnabled.value))
+    }
+  } catch (error) {
+    // Fallback to localStorage if API fails
+    const stored = localStorage.getItem('sim-portal-llm-enabled')
+    llmEnabled.value = stored === 'true'
+  }
 }
 
 // Listen for storage changes (in case Super Admin toggles it in another tab or same session)

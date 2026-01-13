@@ -236,40 +236,31 @@ const llmProviderOptions = [
   { label: 'Other', value: 'Other' }
 ]
 
-// Hash function using SHA-256
-async function hashApiKey(apiKey: string): Promise<string> {
-  const encoder = new TextEncoder()
-  const data = encoder.encode(apiKey)
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data)
-  const hashArray = Array.from(new Uint8Array(hashBuffer))
-  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
-  return hashHex
-}
+// API Base URL for backend calls
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
-// Create masked version of key (show first 4 and last 4 characters)
-function maskApiKey(apiKey: string): string {
-  if (apiKey.length <= 8) {
-    return '*'.repeat(apiKey.length)
-  }
-  const first = apiKey.slice(0, 4)
-  const last = apiKey.slice(-4)
-  const middle = '*'.repeat(Math.min(apiKey.length - 8, 20))
-  return `${first}${middle}${last}`
-}
-
-// Load API key config from localStorage
-function loadApiKeyConfig() {
-  const stored = localStorage.getItem('sim-portal-api-key-config')
-  if (stored) {
-    try {
-      apiKeyConfig.value = JSON.parse(stored)
-    } catch {
+// Load API key config from backend
+async function loadApiKeyConfig() {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/settings/llm`)
+    const result = await response.json()
+    if (result.success && result.data.hasApiKey) {
+      apiKeyConfig.value = {
+        hashedKey: '', // Not returned from backend
+        provider: result.data.provider,
+        maskedKey: result.data.maskedKey,
+        createdAt: new Date().toISOString()
+      }
+    } else {
       apiKeyConfig.value = null
     }
+  } catch (error) {
+    console.error('Error loading LLM config:', error)
+    apiKeyConfig.value = null
   }
 }
 
-// Save API key config to localStorage (and would be sent to backend)
+// Save API key config to backend
 async function saveApiKey() {
   if (!apiKeyForm.value.apiKey) {
     toast.add({ severity: 'error', summary: 'Validation Error', detail: 'Please enter an API key', life: 3000 })
@@ -279,28 +270,29 @@ async function saveApiKey() {
   isSavingApiKey.value = true
 
   try {
-    // Hash the API key before storing/sending
-    const hashedKey = await hashApiKey(apiKeyForm.value.apiKey)
-    const maskedKey = maskApiKey(apiKeyForm.value.apiKey)
+    // Send API key to backend (stored securely server-side)
+    const response = await fetch(`${API_BASE_URL}/api/settings/llm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        apiKey: apiKeyForm.value.apiKey,
+        provider: apiKeyForm.value.provider
+      })
+    })
 
-    const config: ApiKeyConfig = {
-      hashedKey,
-      provider: apiKeyForm.value.provider,
-      maskedKey,
-      createdAt: new Date().toISOString()
+    const result = await response.json()
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to save API key')
     }
 
-    // Store in localStorage (in real app, send hashedKey to backend)
-    localStorage.setItem('sim-portal-api-key-config', JSON.stringify(config))
-    apiKeyConfig.value = config
-
-    // TODO: Send hashedKey to backend via API call
-    // await api.post('/api/settings/api-key', { hashedKey, provider: config.provider })
+    // Reload config from backend to get masked key
+    await loadApiKeyConfig()
 
     showAddApiKeyDialog.value = false
-    apiKeyForm.value = { apiKey: '', provider: 'OpenAI' }
+    apiKeyForm.value = { apiKey: '', provider: 'Anthropic' }
     toast.add({ severity: 'success', summary: 'Success', detail: 'API key saved successfully', life: 3000 })
   } catch (error) {
+    console.error('Error saving API key:', error)
     toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to save API key', life: 3000 })
   } finally {
     isSavingApiKey.value = false
@@ -316,38 +308,69 @@ function deleteApiKey() {
     rejectLabel: 'Cancel',
     acceptLabel: 'Delete',
     acceptClass: 'p-button-danger',
-    accept: () => {
-      localStorage.removeItem('sim-portal-api-key-config')
-      apiKeyConfig.value = null
-      // TODO: Delete from backend via API call
-      // await api.delete('/api/settings/api-key')
-      toast.add({ severity: 'success', summary: 'Success', detail: 'API key deleted successfully', life: 3000 })
+    accept: async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/settings/llm`, {
+          method: 'DELETE'
+        })
+        const result = await response.json()
+        if (!result.success) {
+          throw new Error(result.error || 'Failed to delete API key')
+        }
+        apiKeyConfig.value = null
+        toast.add({ severity: 'success', summary: 'Success', detail: 'API key deleted successfully', life: 3000 })
+      } catch (error) {
+        console.error('Error deleting API key:', error)
+        toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to delete API key', life: 3000 })
+      }
     }
   })
 }
 
 // Open add API key dialog
 function openAddApiKeyDialog() {
-  apiKeyForm.value = { apiKey: '', provider: 'OpenAI' }
+  apiKeyForm.value = { apiKey: '', provider: 'Anthropic' }
   showAddApiKeyDialog.value = true
 }
 
 // LLM Enable/Disable functions
-function loadLLMEnabled() {
-  const stored = localStorage.getItem('sim-portal-llm-enabled')
-  llmEnabled.value = stored === 'true'
+async function loadLLMEnabled() {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/settings/llm`)
+    const result = await response.json()
+    if (result.success) {
+      llmEnabled.value = result.data.enabled || false
+    }
+  } catch (error) {
+    console.error('Error loading LLM enabled status:', error)
+  }
 }
 
-function toggleLLMEnabled() {
-  localStorage.setItem('sim-portal-llm-enabled', String(llmEnabled.value))
-  toast.add({
-    severity: llmEnabled.value ? 'success' : 'info',
-    summary: llmEnabled.value ? 'LLM Enabled' : 'LLM Disabled',
-    detail: llmEnabled.value
-      ? 'Ask Bob is now available for all users'
-      : 'Ask Bob is now hidden for all users',
-    life: 3000
-  })
+async function toggleLLMEnabled() {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/settings/llm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: llmEnabled.value })
+    })
+    const result = await response.json()
+    if (!result.success) {
+      throw new Error(result.error)
+    }
+    // Also update localStorage for other components that might still use it
+    localStorage.setItem('sim-portal-llm-enabled', String(llmEnabled.value))
+    toast.add({
+      severity: llmEnabled.value ? 'success' : 'info',
+      summary: llmEnabled.value ? 'LLM Enabled' : 'LLM Disabled',
+      detail: llmEnabled.value
+        ? 'Ask Bob is now available for all users'
+        : 'Ask Bob is now hidden for all users',
+      life: 3000
+    })
+  } catch (error) {
+    console.error('Error toggling LLM:', error)
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to update LLM setting', life: 3000 })
+  }
 }
 
 // ============ API Clients Management (Mediation) ============
@@ -358,9 +381,6 @@ const showNewApiKeyDialog = ref(false)
 const newApiClientForm = ref({ name: '', description: '' })
 const newlyGeneratedApiKey = ref('')
 const isCreatingApiClient = ref(false)
-
-// API base URL for mediation API
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
 async function loadApiClients() {
   isLoadingApiClients.value = true

@@ -3,7 +3,8 @@ import { ref, computed, watch } from 'vue'
 import Card from 'primevue/card'
 import Dropdown from 'primevue/dropdown'
 import InputText from 'primevue/inputtext'
-import Chips from 'primevue/chips'
+import InputNumber from 'primevue/inputnumber'
+import Calendar from 'primevue/calendar'
 import Button from 'primevue/button'
 import Message from 'primevue/message'
 import Tag from 'primevue/tag'
@@ -21,52 +22,42 @@ const emit = defineEmits(['execute-query', 'clear-response'])
 // Local state
 const selectedEndpoint = ref(null)
 const queryParams = ref({
-  tenant: '',
-  customer: '',
-  imsi: [],
-  mccmnc: [],
-  period: '',
-  periodEnd: ''
+  startDate: null,
+  endDate: null,
+  iccid: '',
+  granularity: 'daily',
+  limit: 100,
+  offset: 0
 })
 
-// Initialize params from config
-watch(() => props.config, (newConfig) => {
-  queryParams.value.tenant = newConfig.tenant || ''
-  queryParams.value.customer = newConfig.customer || ''
-}, { immediate: true })
+// Granularity options for trends endpoint
+const granularityOptions = [
+  { label: 'Daily', value: 'daily' },
+  { label: 'Weekly', value: 'weekly' },
+  { label: 'Monthly', value: 'monthly' }
+]
 
 // Get current endpoint definition
 const currentEndpoint = computed(() => {
   return ANALYTICS_ENDPOINTS.find(e => e.key === selectedEndpoint.value)
 })
 
-// Check if param is required for current endpoint
-const isRequired = (param) => {
-  return currentEndpoint.value?.requiredParams?.includes(param) || false
-}
-
 // Check if param is available for current endpoint
 const isAvailable = (param) => {
   if (!currentEndpoint.value) return false
-  return currentEndpoint.value.requiredParams.includes(param) ||
+  return currentEndpoint.value.requiredParams?.includes(param) ||
          currentEndpoint.value.optionalParams?.includes(param)
 }
 
-// Check if form is valid
+// Format date to ISO string for API
+const formatDateForApi = (date) => {
+  if (!date) return null
+  return date.toISOString().split('T')[0]
+}
+
+// Check if form is valid (all endpoints have optional params so always valid)
 const canExecute = computed(() => {
-  if (!currentEndpoint.value) return false
-
-  // Check all required params are filled
-  for (const param of currentEndpoint.value.requiredParams) {
-    const value = queryParams.value[param]
-    if (Array.isArray(value)) {
-      if (value.length === 0) return false
-    } else {
-      if (!value) return false
-    }
-  }
-
-  return true
+  return currentEndpoint.value !== null
 })
 
 const executeQuery = () => {
@@ -74,19 +65,38 @@ const executeQuery = () => {
 
   // Build params object with only available fields
   const params = {}
-  const allParams = [...currentEndpoint.value.requiredParams, ...(currentEndpoint.value.optionalParams || [])]
+  const allParams = [...(currentEndpoint.value.requiredParams || []), ...(currentEndpoint.value.optionalParams || [])]
 
   for (const param of allParams) {
-    const value = queryParams.value[param]
-    if (Array.isArray(value)) {
-      if (value.length > 0) params[param] = value
-    } else {
-      if (value) params[param] = value
+    if (param === 'startDate' && queryParams.value.startDate) {
+      params.startDate = formatDateForApi(queryParams.value.startDate)
+    } else if (param === 'endDate' && queryParams.value.endDate) {
+      params.endDate = formatDateForApi(queryParams.value.endDate)
+    } else if (param === 'iccid' && queryParams.value.iccid) {
+      params.iccid = queryParams.value.iccid
+    } else if (param === 'granularity' && queryParams.value.granularity) {
+      params.granularity = queryParams.value.granularity
+    } else if (param === 'limit' && queryParams.value.limit) {
+      params.limit = queryParams.value.limit
+    } else if (param === 'offset' && queryParams.value.offset) {
+      params.offset = queryParams.value.offset
     }
   }
 
   emit('execute-query', selectedEndpoint.value, params)
 }
+
+// Set default date range (last 7 days)
+const setDefaultDateRange = () => {
+  const end = new Date()
+  const start = new Date()
+  start.setDate(start.getDate() - 7)
+  queryParams.value.startDate = start
+  queryParams.value.endDate = end
+}
+
+// Initialize with default dates
+setDefaultDateRange()
 </script>
 
 <template>
@@ -94,7 +104,7 @@ const executeQuery = () => {
     <template #title>
       <div class="flex align-items-center gap-2">
         <i class="pi pi-search"></i>
-        <span>Analytics Query</span>
+        <span>Consumption Analytics Query</span>
         <span class="text-500 text-sm font-normal">(verify submitted data)</span>
       </div>
     </template>
@@ -110,96 +120,114 @@ const executeQuery = () => {
           placeholder="Select an endpoint"
           class="w-full"
           @change="emit('clear-response')"
-        />
+        >
+          <template #option="{ option }">
+            <div>
+              <div class="font-medium">{{ option.label }}</div>
+              <div class="text-sm text-500">{{ option.description }}</div>
+            </div>
+          </template>
+        </Dropdown>
       </div>
+
+      <!-- Endpoint info -->
+      <Message v-if="currentEndpoint" severity="info" :closable="false" class="mb-3">
+        <div class="text-sm">
+          <strong>Path:</strong> {{ currentEndpoint.path }}
+        </div>
+      </Message>
 
       <!-- Dynamic form based on endpoint -->
       <template v-if="currentEndpoint">
         <div class="grid">
-          <!-- Tenant -->
-          <div v-if="isAvailable('tenant')" class="col-12 md:col-6">
+          <!-- Start Date -->
+          <div v-if="isAvailable('startDate')" class="col-12 md:col-6">
+            <label class="block text-500 mb-2">Start Date</label>
+            <Calendar
+              v-model="queryParams.startDate"
+              dateFormat="yy-mm-dd"
+              placeholder="Select start date"
+              class="w-full"
+              showIcon
+            />
+          </div>
+
+          <!-- End Date -->
+          <div v-if="isAvailable('endDate')" class="col-12 md:col-6">
+            <label class="block text-500 mb-2">End Date</label>
+            <Calendar
+              v-model="queryParams.endDate"
+              dateFormat="yy-mm-dd"
+              placeholder="Select end date"
+              class="w-full"
+              showIcon
+            />
+          </div>
+
+          <!-- ICCID filter -->
+          <div v-if="isAvailable('iccid')" class="col-12">
             <label class="block text-500 mb-2">
-              Tenant <span v-if="isRequired('tenant')" class="text-red-500">*</span>
+              ICCID <span class="text-400 text-sm">(optional filter)</span>
             </label>
             <InputText
-              v-model="queryParams.tenant"
-              placeholder="test-tenant"
+              v-model="queryParams.iccid"
+              placeholder="Enter ICCID to filter"
               class="w-full"
             />
           </div>
 
-          <!-- Customer -->
-          <div v-if="isAvailable('customer')" class="col-12 md:col-6">
-            <label class="block text-500 mb-2">
-              Customer <span v-if="isRequired('customer')" class="text-red-500">*</span>
-            </label>
-            <InputText
-              v-model="queryParams.customer"
-              placeholder="test-customer"
+          <!-- Granularity (for trends) -->
+          <div v-if="isAvailable('granularity')" class="col-12 md:col-6">
+            <label class="block text-500 mb-2">Granularity</label>
+            <Dropdown
+              v-model="queryParams.granularity"
+              :options="granularityOptions"
+              optionLabel="label"
+              optionValue="value"
               class="w-full"
             />
           </div>
 
-          <!-- IMSI (multi-value) -->
-          <div v-if="isAvailable('imsi')" class="col-12">
-            <label class="block text-500 mb-2">
-              IMSI <span v-if="isRequired('imsi')" class="text-red-500">*</span>
-              <span class="text-400 text-sm ml-2">(press Enter to add)</span>
-            </label>
-            <Chips
-              v-model="queryParams.imsi"
-              placeholder="Enter IMSI values"
+          <!-- Limit -->
+          <div v-if="isAvailable('limit')" class="col-12 md:col-6">
+            <label class="block text-500 mb-2">Limit</label>
+            <InputNumber
+              v-model="queryParams.limit"
+              :min="1"
+              :max="1000"
               class="w-full"
             />
           </div>
 
-          <!-- MCCMNC (multi-value) -->
-          <div v-if="isAvailable('mccmnc')" class="col-12">
-            <label class="block text-500 mb-2">
-              MCCMNC <span class="text-400 text-sm">(optional)</span>
-            </label>
-            <Chips
-              v-model="queryParams.mccmnc"
-              placeholder="Enter MCCMNC values"
-              class="w-full"
-            />
-          </div>
-
-          <!-- Period -->
-          <div v-if="isAvailable('period')" class="col-12 md:col-6">
-            <label class="block text-500 mb-2">
-              Period <span v-if="isRequired('period')" class="text-red-500">*</span>
-              <span class="text-400 text-sm ml-2">(yyyy, yyyy-MM, or yyyy-MM-dd)</span>
-            </label>
-            <InputText
-              v-model="queryParams.period"
-              placeholder="2025-01-09"
-              class="w-full"
-            />
-          </div>
-
-          <!-- Period End -->
-          <div v-if="isAvailable('periodEnd')" class="col-12 md:col-6">
-            <label class="block text-500 mb-2">
-              Period End <span class="text-400 text-sm">(optional)</span>
-            </label>
-            <InputText
-              v-model="queryParams.periodEnd"
-              placeholder="2025-01-15"
+          <!-- Offset -->
+          <div v-if="isAvailable('offset')" class="col-12 md:col-6">
+            <label class="block text-500 mb-2">Offset</label>
+            <InputNumber
+              v-model="queryParams.offset"
+              :min="0"
               class="w-full"
             />
           </div>
         </div>
 
         <!-- Execute button -->
-        <Button
-          icon="pi pi-search"
-          label="Execute Query"
-          @click="executeQuery"
-          :loading="loading"
-          :disabled="!canExecute"
-          class="w-full mt-3"
-        />
+        <div class="flex gap-2 mt-3">
+          <Button
+            icon="pi pi-search"
+            label="Execute Query"
+            @click="executeQuery"
+            :loading="loading"
+            :disabled="!canExecute"
+            class="flex-1"
+          />
+          <Button
+            icon="pi pi-calendar"
+            label="Last 7 Days"
+            @click="setDefaultDateRange"
+            severity="secondary"
+            outlined
+          />
+        </div>
       </template>
 
       <!-- Error message -->
@@ -213,6 +241,9 @@ const executeQuery = () => {
           <div class="flex align-items-center gap-2">
             <Tag value="200 OK" severity="success" />
             <span class="text-500 text-sm">{{ response.duration }}ms</span>
+            <span v-if="Array.isArray(response.data)" class="text-500 text-sm">
+              ({{ response.data.length }} records)
+            </span>
           </div>
           <Button
             icon="pi pi-copy"
@@ -234,6 +265,6 @@ const executeQuery = () => {
 }
 
 .response-json {
-  max-height: 300px;
+  max-height: 400px;
 }
 </style>

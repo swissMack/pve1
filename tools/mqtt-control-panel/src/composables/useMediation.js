@@ -7,9 +7,10 @@ import { analyticsService } from '../services/analyticsService.js'
  */
 export function useMediation() {
   // ============ Connection Config ============
+  // Note: Analytics endpoints are now served from the same API as the portal (port 3001)
   const config = ref({
     portalUrl: import.meta.env.VITE_PORTAL_API_URL || 'http://localhost:3001',
-    analyticsUrl: import.meta.env.VITE_ANALYTICS_API_URL || 'http://localhost:9010',
+    analyticsUrl: import.meta.env.VITE_PORTAL_API_URL || 'http://localhost:3001', // Same as portal - consumption endpoints
     apiKey: import.meta.env.VITE_PORTAL_API_KEY || '',
     tenant: 'test-tenant',
     customer: 'test-customer'
@@ -215,10 +216,15 @@ export function useMediation() {
       const batchId = generateBatchId()
       const source = generatorSettings.value.source
 
-      // Remove UI helper fields before sending
-      const cleanRecords = generatedRecords.value.map(record => {
-        const { _formattedBytes, _periodDate, ...clean } = record
-        return clean
+      // Remove UI helper fields and regenerate record_ids to ensure uniqueness per submission
+      // This allows submitting the same generated records multiple times as separate batches
+      const submissionTimestamp = Date.now()
+      const cleanRecords = generatedRecords.value.map((record, index) => {
+        const { _formattedBytes, _periodDate, recordId, ...clean } = record
+        return {
+          ...clean,
+          recordId: `rec_${submissionTimestamp}_${String(index).padStart(4, '0')}`
+        }
       })
 
       const result = await mediationService.submitBatch(batchId, cleanRecords, source, config.value)

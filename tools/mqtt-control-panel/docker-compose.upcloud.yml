@@ -1,0 +1,59 @@
+# MQTT Control Panel - UpCloud Deployment
+# Connects to existing simportal services on UpCloud
+
+services:
+  # Backend API Server (Node.js/Express)
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mqtt-control-panel-backend
+    environment:
+      # MQTT Configuration - connect to simportal EMQX
+      MQTT_BROKER_URL: mqtt://simportal-emqx:1883
+      # EMQX Management API
+      EMQX_API_URL: http://simportal-emqx:18083
+      # API Port
+      API_PORT: 3003
+      # SIM Portal API URL (internal Docker network)
+      PORTAL_API_URL: http://simportal-api:3001
+    networks:
+      - simportal-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3003/api/generator/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Frontend (Nginx serving Vue.js)
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        # Build-time environment variables for Vite
+        VITE_PORTAL_API_URL: http://5.22.211.72:3001
+        VITE_MQTT_BROKER_URL: ws://5.22.211.72:8083/mqtt
+        VITE_EMQX_DASHBOARD_URL: http://5.22.211.72:18083
+        VITE_BACKEND_API_URL: http://5.22.211.72:5174/api
+    container_name: mqtt-control-panel-frontend
+    ports:
+      - "5174:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - simportal-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+networks:
+  simportal-network:
+    external: true

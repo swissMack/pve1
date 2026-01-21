@@ -603,6 +603,9 @@ body {
   border-radius: 8px;
   padding: 3px;
   gap: 2px;
+  overflow-x: auto;
+  max-width: 100%;
+  scrollbar-width: thin;
 }
 
 .view-tab {

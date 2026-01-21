@@ -1,8 +1,9 @@
 import axios from 'axios'
 
 /**
- * Analytics Service - GET analytics data from Analytics Service API
- * Used to verify submitted usage data
+ * Analytics Service - GET analytics/consumption data from SIM Card Portal API
+ * Updated to use the deployed consumption endpoints (port 3001)
+ * Used to verify submitted usage data and view analytics
  */
 
 // Create axios instance with custom config
@@ -37,13 +38,13 @@ const buildQueryParams = (params) => {
 
 export const analyticsService = {
   /**
-   * Ping the analytics service
-   * @param {string} baseUrl - Analytics API base URL
+   * Ping the API service (health check)
+   * @param {string} baseUrl - API base URL
    */
   async ping(baseUrl) {
     const api = createAnalyticsApi(baseUrl)
     try {
-      const response = await api.get('/ping')
+      const response = await api.get('/api/health')
       return { success: true, data: response.data }
     } catch (error) {
       return {
@@ -54,74 +55,86 @@ export const analyticsService = {
   },
 
   /**
-   * Get usage per IMSI
-   * @param {Object} params - { tenant, customer, imsi[], period, periodEnd? }
-   * @param {string} baseUrl - Analytics API base URL
+   * Get KPI summary data
+   * @param {Object} params - { startDate?, endDate? }
+   * @param {string} baseUrl - API base URL
    */
-  async getImsiUsage(params, baseUrl) {
+  async getKpis(params, baseUrl) {
     const api = createAnalyticsApi(baseUrl)
     const queryString = buildQueryParams(params)
-    const response = await api.get(`/analytics/imsi?${queryString}`)
+    const response = await api.get(`/api/consumption/kpis?${queryString}`)
     return response.data
   },
 
   /**
-   * Get usage per IMSI per network
-   * @param {Object} params - { tenant, customer, imsi[], mccmnc[]?, period, periodEnd? }
-   * @param {string} baseUrl - Analytics API base URL
+   * Get usage trends data
+   * @param {Object} params - { startDate?, endDate?, granularity? }
+   * @param {string} baseUrl - API base URL
    */
-  async getImsiNetworkUsage(params, baseUrl) {
+  async getTrends(params, baseUrl) {
     const api = createAnalyticsApi(baseUrl)
     const queryString = buildQueryParams(params)
-    const response = await api.get(`/analytics/imsi/network?${queryString}`)
+    const response = await api.get(`/api/consumption/trends?${queryString}`)
     return response.data
   },
 
   /**
-   * Get usage per customer per network
-   * @param {Object} params - { tenant, customer, mccmnc[]?, period, periodEnd? }
-   * @param {string} baseUrl - Analytics API base URL
+   * Get carrier breakdown data
+   * @param {Object} params - { startDate?, endDate? }
+   * @param {string} baseUrl - API base URL
    */
-  async getCustomerNetworkUsage(params, baseUrl) {
+  async getCarriers(params, baseUrl) {
     const api = createAnalyticsApi(baseUrl)
     const queryString = buildQueryParams(params)
-    const response = await api.get(`/analytics/customer/network?${queryString}`)
+    const response = await api.get(`/api/consumption/carriers?${queryString}`)
     return response.data
   },
 
   /**
-   * Get usage per tenant per network
-   * @param {Object} params - { tenant, mccmnc[]?, period, periodEnd? }
-   * @param {string} baseUrl - Analytics API base URL
+   * Get detailed usage records
+   * @param {Object} params - { startDate?, endDate?, iccid?, limit?, offset? }
+   * @param {string} baseUrl - API base URL
    */
-  async getTenantNetworkUsage(params, baseUrl) {
+  async getUsageDetails(params, baseUrl) {
     const api = createAnalyticsApi(baseUrl)
     const queryString = buildQueryParams(params)
-    const response = await api.get(`/analytics/tenant/network?${queryString}`)
+    const response = await api.get(`/api/consumption/usage-details?${queryString}`)
     return response.data
   },
 
   /**
-   * Get unique IMSI count per customer per network
-   * @param {Object} params - { tenant, customer, mccmnc[]?, period, periodEnd? }
-   * @param {string} baseUrl - Analytics API base URL
+   * Get unique IMSI list
+   * @param {Object} params - { startDate?, endDate? }
+   * @param {string} baseUrl - API base URL
    */
-  async getUniqueImsiCustomerNetwork(params, baseUrl) {
+  async getUniqueImsis(params, baseUrl) {
     const api = createAnalyticsApi(baseUrl)
     const queryString = buildQueryParams(params)
-    const response = await api.get(`/analytics/unique/imsi/count/customer/network?${queryString}`)
+    const response = await api.get(`/api/consumption/unique-imsis?${queryString}`)
     return response.data
   },
 
   /**
-   * Get unique IMSI count per tenant per network
-   * @param {Object} params - { tenant, mccmnc[]?, period, periodEnd? }
-   * @param {string} baseUrl - Analytics API base URL
+   * Get carrier locations data
+   * @param {Object} params - { startDate?, endDate? }
+   * @param {string} baseUrl - API base URL
    */
-  async getUniqueImsiTenantNetwork(params, baseUrl) {
+  async getCarrierLocations(params, baseUrl) {
     const api = createAnalyticsApi(baseUrl)
     const queryString = buildQueryParams(params)
-    const response = await api.get(`/analytics/unique/imsi/count/tenant/network?${queryString}`)
+    const response = await api.get(`/api/consumption/carrier-locations?${queryString}`)
+    return response.data
+  },
+
+  /**
+   * Get regional usage data
+   * @param {Object} params - { startDate?, endDate? }
+   * @param {string} baseUrl - API base URL
+   */
+  async getRegional(params, baseUrl) {
+    const api = createAnalyticsApi(baseUrl)
+    const queryString = buildQueryParams(params)
+    const response = await api.get(`/api/consumption/regional?${queryString}`)
     return response.data
   },
 
@@ -129,16 +142,17 @@ export const analyticsService = {
    * Execute query for any endpoint
    * @param {string} endpoint - Endpoint key
    * @param {Object} params - Query parameters
-   * @param {string} baseUrl - Analytics API base URL
+   * @param {string} baseUrl - API base URL
    */
   async executeQuery(endpoint, params, baseUrl) {
     const methodMap = {
-      'imsi': this.getImsiUsage,
-      'imsi/network': this.getImsiNetworkUsage,
-      'customer/network': this.getCustomerNetworkUsage,
-      'tenant/network': this.getTenantNetworkUsage,
-      'unique/imsi/count/customer/network': this.getUniqueImsiCustomerNetwork,
-      'unique/imsi/count/tenant/network': this.getUniqueImsiTenantNetwork
+      'kpis': this.getKpis,
+      'trends': this.getTrends,
+      'carriers': this.getCarriers,
+      'usage-details': this.getUsageDetails,
+      'unique-imsis': this.getUniqueImsis,
+      'carrier-locations': this.getCarrierLocations,
+      'regional': this.getRegional
     }
 
     const method = methodMap[endpoint]
@@ -150,48 +164,62 @@ export const analyticsService = {
   }
 }
 
-// Endpoint definitions for UI
+// Endpoint definitions for UI - Updated to match deployed API
 export const ANALYTICS_ENDPOINTS = [
   {
-    key: 'imsi',
-    label: 'Usage per IMSI',
-    path: '/analytics/imsi',
-    requiredParams: ['tenant', 'customer', 'imsi', 'period'],
-    optionalParams: ['periodEnd']
+    key: 'kpis',
+    label: 'KPI Summary',
+    path: '/api/consumption/kpis',
+    requiredParams: [],
+    optionalParams: ['startDate', 'endDate'],
+    description: 'Total usage, active SIMs, and key metrics'
   },
   {
-    key: 'imsi/network',
-    label: 'Usage per IMSI per Network',
-    path: '/analytics/imsi/network',
-    requiredParams: ['tenant', 'customer', 'imsi', 'period'],
-    optionalParams: ['mccmnc', 'periodEnd']
+    key: 'trends',
+    label: 'Usage Trends',
+    path: '/api/consumption/trends',
+    requiredParams: [],
+    optionalParams: ['startDate', 'endDate', 'granularity'],
+    description: 'Usage over time with configurable granularity'
   },
   {
-    key: 'customer/network',
-    label: 'Usage per Customer per Network',
-    path: '/analytics/customer/network',
-    requiredParams: ['tenant', 'customer', 'period'],
-    optionalParams: ['mccmnc', 'periodEnd']
+    key: 'carriers',
+    label: 'Carrier Breakdown',
+    path: '/api/consumption/carriers',
+    requiredParams: [],
+    optionalParams: ['startDate', 'endDate'],
+    description: 'Usage breakdown by carrier/network'
   },
   {
-    key: 'tenant/network',
-    label: 'Usage per Tenant per Network',
-    path: '/analytics/tenant/network',
-    requiredParams: ['tenant', 'period'],
-    optionalParams: ['mccmnc', 'periodEnd']
+    key: 'usage-details',
+    label: 'Usage Details',
+    path: '/api/consumption/usage-details',
+    requiredParams: [],
+    optionalParams: ['startDate', 'endDate', 'iccid', 'limit', 'offset'],
+    description: 'Detailed usage records with filtering'
   },
   {
-    key: 'unique/imsi/count/customer/network',
-    label: 'Unique IMSI Count (Customer/Network)',
-    path: '/analytics/unique/imsi/count/customer/network',
-    requiredParams: ['tenant', 'customer', 'period'],
-    optionalParams: ['mccmnc', 'periodEnd']
+    key: 'unique-imsis',
+    label: 'Unique IMSIs',
+    path: '/api/consumption/unique-imsis',
+    requiredParams: [],
+    optionalParams: ['startDate', 'endDate'],
+    description: 'List of unique IMSIs with usage'
   },
   {
-    key: 'unique/imsi/count/tenant/network',
-    label: 'Unique IMSI Count (Tenant/Network)',
-    path: '/analytics/unique/imsi/count/tenant/network',
-    requiredParams: ['tenant', 'period'],
-    optionalParams: ['mccmnc', 'periodEnd']
+    key: 'carrier-locations',
+    label: 'Carrier Locations',
+    path: '/api/consumption/carrier-locations',
+    requiredParams: [],
+    optionalParams: ['startDate', 'endDate'],
+    description: 'Geographic distribution of carrier usage'
+  },
+  {
+    key: 'regional',
+    label: 'Regional Usage',
+    path: '/api/consumption/regional',
+    requiredParams: [],
+    optionalParams: ['startDate', 'endDate'],
+    description: 'Usage aggregated by region'
   }
 ]

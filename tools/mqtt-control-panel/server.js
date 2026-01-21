@@ -247,7 +247,7 @@ async function getEmqxToken() {
   const response = await fetch(`${EMQX_API_BASE}/api/v5/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: 'admin', password: 'public' })
+    body: JSON.stringify({ username: 'admin', password: process.env.EMQX_PASSWORD || 'public123' })
   })
 
   if (response.ok) {

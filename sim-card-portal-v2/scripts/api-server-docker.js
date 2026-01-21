@@ -151,6 +151,34 @@ app.put('/api/devices', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Device ID is required' })
     }
 
+    // Look up device_type_id from name if deviceType is provided as a name
+    if (updates.deviceType && typeof updates.deviceType === 'string' && !updates.deviceType.startsWith('DT')) {
+      const dtResult = await pool.query(
+        `SELECT id FROM ${SCHEMA}device_types WHERE name = $1`,
+        [updates.deviceType]
+      )
+      if (dtResult.rows.length > 0) {
+        updates.deviceType = dtResult.rows[0].id
+      } else {
+        // If device type not found, set to null to avoid FK violation
+        updates.deviceType = null
+      }
+    }
+
+    // Look up location_id from name if location is provided as a name
+    if (updates.location && typeof updates.location === 'string' && !updates.location.startsWith('LOC')) {
+      const locResult = await pool.query(
+        `SELECT id FROM ${SCHEMA}locations WHERE name = $1`,
+        [updates.location]
+      )
+      if (locResult.rows.length > 0) {
+        updates.location = locResult.rows[0].id
+      } else {
+        // If location not found, set to null
+        updates.location = null
+      }
+    }
+
     const updateFields = []
     const values = []
     let paramCount = 0

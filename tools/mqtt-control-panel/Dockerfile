@@ -3,6 +3,9 @@ FROM node:20-alpine
 
 WORKDIR /app
 
+# Install Docker CLI for container management
+RUN apk add --no-cache docker-cli
+
 # Copy package files
 COPY package*.json ./
 
@@ -12,14 +15,8 @@ RUN npm ci --omit=dev
 # Copy server files
 COPY server.js ./
 
-# Create non-root user for security
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001
-
-# Set ownership
-RUN chown -R nodejs:nodejs /app
-
-USER nodejs
+# Note: Running as root to allow Docker socket access for container management
+# In production, consider using rootless Docker or proper group permissions
 
 # Expose API port
 EXPOSE 3003

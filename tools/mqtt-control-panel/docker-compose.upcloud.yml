@@ -13,10 +13,16 @@ services:
       MQTT_BROKER_URL: mqtt://simportal-emqx:1883
       # EMQX Management API
       EMQX_API_URL: http://simportal-emqx:18083
+      EMQX_PASSWORD: public123
       # API Port
       API_PORT: 3003
       # SIM Portal API URL (internal Docker network)
       PORTAL_API_URL: http://simportal-api:3001
+      # Enable Docker access for container management
+      DOCKER_HOST: unix:///var/run/docker.sock
+    volumes:
+      # Mount Docker socket for container management (logs, status)
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - simportal-network
     restart: unless-stopped

@@ -329,14 +329,24 @@ app.get('/api/mqtt/messages', (req, res) => {
 
 // ============ All Services Status ============
 
+// Service container names - configurable via environment variables
+const SERVICE_CONTAINERS = {
+  emqx: process.env.EMQX_CONTAINER_NAME || 'simportal-emqx',
+  'data-generator': process.env.GENERATOR_CONTAINER_NAME || 'mqtt-data-generator',
+  influxdb: process.env.INFLUXDB_CONTAINER_NAME || 'mqtt-influxdb',
+  prometheus: process.env.PROMETHEUS_CONTAINER_NAME || 'mqtt-prometheus',
+  grafana: process.env.GRAFANA_CONTAINER_NAME || 'mqtt-grafana',
+  api: process.env.API_CONTAINER_NAME || 'simportal-api',
+  postgres: process.env.POSTGRES_CONTAINER_NAME || 'simportal-postgres'
+}
+
 // GET /api/services/status
 app.get('/api/services/status', async (req, res) => {
   try {
-    const services = ['mqtt-emqx', 'mqtt-data-generator', 'mqtt-influxdb', 'mqtt-prometheus', 'mqtt-grafana']
     const statuses = {}
 
-    for (const service of services) {
-      statuses[service] = await getContainerStatus(service)
+    for (const [serviceName, containerName] of Object.entries(SERVICE_CONTAINERS)) {
+      statuses[serviceName] = await getContainerStatus(containerName)
     }
 
     res.json(statuses)

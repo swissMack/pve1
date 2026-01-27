@@ -1,0 +1,110 @@
+# SIM Card Portal - upcloudBSS Deployment
+# Database auto-initializes on first start
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: simcard-portal-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: simportal-secure-password
+      POSTGRES_DB: simcardportal
+    volumes:
+      - simcard-portal-postgres-data:/var/lib/postgresql/data
+      - ./docker/init-db:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5433:5432"
+    networks:
+      - simcard-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d simcardportal"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # API Server
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    container_name: simcard-portal-api
+    environment:
+      DATABASE_URL: postgresql://postgres:simportal-secure-password@simcard-portal-db:5432/simcardportal
+      USE_PUBLIC_SCHEMA: "true"
+      PORT: "3001"
+      MQTT_BROKER_URL: mqtt://mqtt-emqx:1883
+      MQTT_CLIENT_ID: simcard-portal-api
+    ports:
+      - "3001:3001"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - simcard-network
+      - mqtt-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Frontend (Nginx)
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.frontend.multistage
+      args:
+        VITE_MQTT_BROKER_URL: wss://mqtt-panel.bob-ventures.com/mqtt
+        VITE_GRAFANA_URL: https://grafana.bob-ventures.com
+        VITE_INFLUXDB_URL: https://influxdb.bob-ventures.com
+        VITE_EMQX_DASHBOARD_URL: https://emqx.bob-ventures.com
+        VITE_USE_API: "true"
+        VITE_API_URL: "https://portal.bob-ventures.com"
+    container_name: simcard-portal-frontend
+    ports:
+      - "8081:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - simcard-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # MQTT Bridge (optional - for real-time updates)
+  mqtt-bridge:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.mqtt-bridge
+    container_name: simcard-portal-mqtt-bridge
+    environment:
+      MQTT_BROKER_URL: mqtt://mqtt-emqx:1883
+      MQTT_TOPIC_PREFIX: simportal/devices
+      API_URL: http://simcard-portal-api:3001
+      WS_PORT: "3002"
+    ports:
+      - "3002:3002"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - simcard-network
+      - mqtt-network
+    restart: unless-stopped
+
+volumes:
+  simcard-portal-postgres-data:
+
+networks:
+  simcard-network:
+    external: true
+  mqtt-network:
+    external: true

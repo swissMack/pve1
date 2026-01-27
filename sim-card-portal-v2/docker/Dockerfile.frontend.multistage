@@ -1,0 +1,50 @@
+# Frontend Dockerfile - Multi-stage build with Vite environment variables
+# Build args are injected at build time for VITE_* variables
+
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Build arguments for Vite environment variables
+ARG VITE_MQTT_BROKER_URL=ws://localhost:8083/mqtt
+ARG VITE_GRAFANA_URL=http://localhost:3000
+ARG VITE_INFLUXDB_URL=http://localhost:8086
+ARG VITE_EMQX_DASHBOARD_URL=http://localhost:18083
+ARG VITE_USE_API=true
+ARG VITE_API_URL=http://localhost:3001
+ARG VITE_GOOGLE_MAPS_API_KEY=
+ARG VITE_GOOGLE_MAPS_MAP_ID=
+
+# Set environment variables for build
+ENV VITE_MQTT_BROKER_URL=$VITE_MQTT_BROKER_URL
+ENV VITE_GRAFANA_URL=$VITE_GRAFANA_URL
+ENV VITE_INFLUXDB_URL=$VITE_INFLUXDB_URL
+ENV VITE_EMQX_DASHBOARD_URL=$VITE_EMQX_DASHBOARD_URL
+ENV VITE_USE_API=$VITE_USE_API
+ENV VITE_API_URL=$VITE_API_URL
+ENV VITE_GOOGLE_MAPS_API_KEY=$VITE_GOOGLE_MAPS_API_KEY
+ENV VITE_GOOGLE_MAPS_MAP_ID=$VITE_GOOGLE_MAPS_MAP_ID
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm ci
+
+# Copy source code
+COPY . .
+
+# Build the frontend with environment variables
+RUN npm run build
+
+# Production stage with Nginx
+FROM nginx:alpine
+
+# Copy built files
+COPY --from=builder /app/dist /usr/share/nginx/html
+COPY docker/nginx.conf /etc/nginx/nginx.conf
+
+EXPOSE 80
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3   CMD wget --no-verbose --tries=1 --spider http://127.0.0.1/ || exit 1
+
+CMD ["nginx", "-g", "daemon off;"]

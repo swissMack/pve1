@@ -504,21 +504,25 @@ A consultant will review this data and reach out to discuss optimization opportu
 
       <!-- Message list -->
       <template v-for="message in messages" :key="message.id">
-        <!-- User message -->
-        <div v-if="message.role === 'user'" class="flex justify-end">
-          <div class="max-w-[80%] px-4 py-2 bg-primary rounded-2xl rounded-tr-sm">
-            <p class="text-white text-sm">{{ message.content }}</p>
+        <!-- User message (Question) - Now with label and better visibility -->
+        <div v-if="message.role === 'user'" class="flex flex-col items-end">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="text-text-secondary text-xs">You</span>
+            <span class="material-symbols-outlined text-blue-400 text-lg">person</span>
+          </div>
+          <div class="max-w-[85%] px-4 py-3 bg-primary/20 border border-primary/40 rounded-2xl rounded-tr-sm">
+            <p class="text-white text-sm font-medium">{{ message.content }}</p>
           </div>
         </div>
 
-        <!-- Assistant message -->
-        <div v-else class="flex justify-start">
-          <div class="max-w-[90%]">
-            <div class="flex items-center gap-2 mb-2">
-              <span class="material-symbols-outlined text-primary text-lg">smart_toy</span>
-              <span class="text-text-secondary text-xs">Bob</span>
-            </div>
+        <!-- Assistant message (Answer) -->
+        <div v-else class="flex flex-col items-start">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="material-symbols-outlined text-primary text-lg">smart_toy</span>
+            <span class="text-text-secondary text-xs">Bob</span>
+          </div>
 
+          <div class="max-w-[90%]">
             <!-- Text response -->
             <div v-if="message.content" class="px-4 py-3 bg-surface-dark-highlight border border-border-dark rounded-2xl rounded-tl-sm mb-2">
               <p class="text-white text-sm whitespace-pre-wrap">{{ message.content }}</p>

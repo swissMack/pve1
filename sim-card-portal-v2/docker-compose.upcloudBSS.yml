@@ -88,17 +88,32 @@ services:
     environment:
       MQTT_BROKER_URL: mqtt://mqtt-emqx:1883
       MQTT_TOPIC_PREFIX: simportal/devices
+      MQTT_CLIENT_ID: simcard-portal-bridge
       API_URL: http://simcard-portal-api:3001
       WS_PORT: "3002"
+      DB_HOST: simcard-portal-db
+      DB_PORT: "5432"
+      DB_USER: postgres
+      DB_PASSWORD: simportal-secure-password
+      DB_NAME: simcardportal
+      USE_PUBLIC_SCHEMA: "true"
     ports:
       - "3002:3002"
     depends_on:
+      db:
+        condition: service_healthy
       api:
         condition: service_healthy
     networks:
       - simcard-network
       - mqtt-network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
 volumes:
   simcard-portal-postgres-data:

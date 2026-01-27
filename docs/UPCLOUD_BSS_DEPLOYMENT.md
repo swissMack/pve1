@@ -217,6 +217,47 @@ docker compose -f docker-compose.upcloudBSS.yml up -d --build
 
 ---
 
+## MQTT Bridge Service
+
+The MQTT Bridge (`simcard-portal-mqtt-bridge`) subscribes to EMQX MQTT topics and persists sensor/location data to PostgreSQL.
+
+### Environment Variables (in docker-compose.upcloudBSS.yml)
+
+| Variable | Value | Purpose |
+|----------|-------|---------|
+| `MQTT_BROKER_URL` | `mqtt://mqtt-emqx:1883` | EMQX broker address |
+| `MQTT_TOPIC_PREFIX` | `simportal/devices` | Topic prefix to subscribe |
+| `MQTT_CLIENT_ID` | `simcard-portal-bridge` | Unique client identifier |
+| `DB_HOST` | `simcard-portal-db` | PostgreSQL container hostname |
+| `DB_PORT` | `5432` | PostgreSQL port |
+| `DB_USER` | `postgres` | Database user |
+| `DB_PASSWORD` | `simportal-secure-password` | Database password |
+| `DB_NAME` | `simcardportal` | Database name |
+| `USE_PUBLIC_SCHEMA` | `true` | Use public schema |
+| `WS_PORT` | `3002` | WebSocket server port |
+
+### Topics Subscribed
+- `simportal/devices/+/sensors` - Device sensor data (temperature, humidity, etc.)
+- `simportal/devices/+/location` - Device GPS location data
+
+### MQTT Generator Devices
+The MQTT data generator sends data for devices `DEV001` through `DEV008`. These devices must exist in the `devices` table with matching IDs for the foreign key constraints to pass.
+
+### Check Bridge Status
+```bash
+# View logs
+docker logs -f simcard-portal-mqtt-bridge
+
+# Check health
+docker inspect --format='{{.State.Health.Status}}' simcard-portal-mqtt-bridge
+
+# Verify data is being recorded
+docker exec simcard-portal-db psql -U postgres -d simcardportal -c \
+  "SELECT COUNT(*) FROM device_sensor_history WHERE recorded_at > NOW() - INTERVAL '1 hour';"
+```
+
+---
+
 ## SSL/TLS Certificates
 
 ### Certificate Provider
@@ -400,6 +441,18 @@ The PostgreSQL database automatically initializes on first start using scripts i
 | `03-generate-usage-data.sql` | Generates 6 months of usage data with current dates |
 
 **Note:** These scripts only run when the database volume is empty (first start or after `docker compose down -v`).
+
+### Tables for MQTT Data
+
+The `device_sensor_history` and `device_location_history` tables store real-time data from MQTT:
+
+**device_sensor_history columns:**
+- `device_id`, `temperature`, `humidity`, `pressure`, `battery_voltage`, `signal_rssi`
+- `light`, `battery_level`, `signal_strength`, `metadata`, `recorded_at`
+
+**device_location_history columns:**
+- `device_id`, `latitude`, `longitude`, `altitude`, `speed`, `heading`, `accuracy`
+- `location_source`, `battery_level`, `signal_strength`, `metadata`, `recorded_at`
 
 ### Full Database Reset
 ```bash

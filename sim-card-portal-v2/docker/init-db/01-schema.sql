@@ -116,6 +116,10 @@ CREATE TABLE IF NOT EXISTS device_location_history (
   speed NUMERIC(10,2),
   heading NUMERIC(5,2),
   accuracy NUMERIC(10,2),
+  location_source VARCHAR(50),
+  battery_level INTEGER,
+  signal_strength INTEGER,
+  metadata JSONB,
   recorded_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -128,6 +132,10 @@ CREATE TABLE IF NOT EXISTS device_sensor_history (
   pressure NUMERIC(10,2),
   battery_voltage NUMERIC(5,3),
   signal_rssi INTEGER,
+  light NUMERIC(10,2),
+  battery_level INTEGER,
+  signal_strength INTEGER,
+  metadata JSONB,
   recorded_at TIMESTAMPTZ DEFAULT NOW()
 );
 

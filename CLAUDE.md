@@ -32,4 +32,46 @@ tests/
 
 
 <!-- MANUAL ADDITIONS START -->
+
+## Git Repositories
+
+- **Primary:** https://github.com/ioto-communications/pve1
+- **Mirror:** https://github.com/swissMack/pve1
+
+Both repos should be kept in sync.
+
+## Deployment - upcloudBSS
+
+- **Server:** 94.237.6.75 (ssh upcloudBSS)
+- **Location:** Netherlands (Amsterdam, nl-ams1)
+- **User:** tarik
+
+### Deployed Services
+
+| Service | Path | Container |
+|---------|------|-----------|
+| SIM Card Portal API | /opt/pve1/sim-card-portal-v2 | simcard-portal-api |
+| SIM Card Portal Frontend | /opt/pve1/sim-card-portal-v2 | simcard-portal-frontend |
+| SIM Card Portal DB | /opt/pve1/sim-card-portal-v2 | simcard-portal-db |
+| MQTT Control Panel | /opt/pve1/mqtt-control-panel | mqtt-control-panel-frontend/backend |
+
+### URLs (via Traefik)
+
+- Portal: https://portal.bob-ventures.com
+- MQTT Panel: https://mqtt-panel.bob-ventures.com
+- Grafana: https://grafana.bob-ventures.com
+- EMQX: https://emqx.bob-ventures.com
+- ERPNext: https://erp.bob-ventures.com
+
+### Database
+
+- PostgreSQL container: simcard-portal-db
+- Database: simcardportal
+- Schema: public (USE_PUBLIC_SCHEMA=true)
+
+### Notes
+
+- After rebuilding API container, reconnect to traefik-network: `docker network connect traefik-network simcard-portal-api`
+- VITE_PORTAL_API_URL must be set as build arg for MQTT Control Panel frontend
+
 <!-- MANUAL ADDITIONS END -->

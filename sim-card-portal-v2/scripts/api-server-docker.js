@@ -254,23 +254,61 @@ app.get('/api/simcards', async (req, res) => {
   try {
     const { id } = req.query
 
+    // Helper to format bytes as human readable
+    const formatBytes = (bytes) => {
+      if (!bytes || bytes === 0) return '0 MB'
+      const gb = bytes / (1024 * 1024 * 1024)
+      if (gb >= 1) return gb.toFixed(2) + ' GB'
+      const mb = bytes / (1024 * 1024)
+      return mb.toFixed(2) + ' MB'
+    }
+
+    // Helper to transform row to expected format
+    const transformSimCard = (row) => ({
+      id: row.id,
+      iccid: row.iccid,
+      imsi: row.imsi,
+      msisdn: row.msisdn,
+      status: row.status,
+      carrier: row.carrier_name || 'Unknown',
+      carrierId: row.carrier_id,
+      plan: row.plan_name || 'Unknown',
+      planId: row.plan_id,
+      dataUsed: formatBytes(parseInt(row.data_usage_bytes) || 0),
+      dataLimit: formatBytes(parseInt(row.data_limit_bytes) || 0),
+      dataUsageBytes: row.data_usage_bytes,
+      dataLimitBytes: row.data_limit_bytes,
+      activationDate: row.activation_date,
+      expiryDate: row.expiry_date || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    })
+
     if (id) {
       const result = await pool.query(`
-        SELECT * FROM ${SCHEMA}sim_cards WHERE id = $1
+        SELECT s.*, c.name as carrier_name, p.name as plan_name
+        FROM ${SCHEMA}sim_cards s
+        LEFT JOIN ${SCHEMA}carriers c ON s.carrier_id = c.id
+        LEFT JOIN ${SCHEMA}plans p ON s.plan_id = p.id
+        WHERE s.id = $1
       `, [id])
 
       if (result.rows.length === 0) {
         return res.status(404).json({ success: false, error: 'SIM card not found' })
       }
 
-      return res.json({ success: true, data: toCamelCase(result.rows[0]) })
+      return res.json({ success: true, data: transformSimCard(result.rows[0]) })
     }
 
     const result = await pool.query(`
-      SELECT * FROM ${SCHEMA}sim_cards ORDER BY id
+      SELECT s.*, c.name as carrier_name, p.name as plan_name
+      FROM ${SCHEMA}sim_cards s
+      LEFT JOIN ${SCHEMA}carriers c ON s.carrier_id = c.id
+      LEFT JOIN ${SCHEMA}plans p ON s.plan_id = p.id
+      ORDER BY s.id
     `)
 
-    res.json({ success: true, data: toCamelCase(result.rows) })
+    res.json({ success: true, data: result.rows.map(transformSimCard) })
   } catch (error) {
     console.error('Error fetching SIM cards:', error)
     res.status(500).json({ success: false, error: 'Database error' })
@@ -706,6 +744,27 @@ app.post('/api/v1/usage/batch', async (req, res) => {
         message: 'Failed to process usage batch: ' + error.message
       }
     })
+  }
+})
+
+// GET /api/v1/provisioned-sims - Get list of provisioned SIMs for mediation
+app.get("/api/v1/provisioned-sims", async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT sim_id, iccid, msisdn, status FROM " + SCHEMA + "provisioned_sims ORDER BY iccid"
+    )
+    res.json({
+      success: true,
+      data: result.rows.map(row => ({
+        simId: row.sim_id,
+        iccid: row.iccid,
+        msisdn: row.msisdn,
+        status: row.status
+      }))
+    })
+  } catch (error) {
+    console.error("Error fetching provisioned SIMs:", error)
+    res.status(500).json({ success: false, error: "Database error" })
   }
 })
 

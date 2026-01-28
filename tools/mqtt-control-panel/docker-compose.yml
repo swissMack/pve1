@@ -34,6 +34,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.frontend
+      args:
+        VITE_PORTAL_API_URL: https://portal.bob-ventures.com
     container_name: mqtt-control-panel-frontend
     ports:
       - "${CONTROL_PANEL_PORT:-5174}:80"

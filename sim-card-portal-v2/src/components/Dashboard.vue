@@ -23,7 +23,6 @@ import NotificationsPage from './NotificationsPage.vue'
 // Sprint 5: Bulk Operations
 import BulkOperationsPage from './BulkOperationsPage.vue'
 // Sprint 6: NLQ + Chat
-import AskBobInput from './AskBobInput.vue'
 import BobSupportPage from './BobSupportPage.vue'
 
 // API Base URL

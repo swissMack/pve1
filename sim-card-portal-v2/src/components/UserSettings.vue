@@ -237,7 +237,7 @@ const llmProviderOptions = [
 ]
 
 // API Base URL for backend calls
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+const API_BASE_URL = window.location.origin
 
 // Load API key config from backend
 async function loadApiKeyConfig() {

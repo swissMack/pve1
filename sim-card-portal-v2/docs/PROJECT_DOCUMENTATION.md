@@ -5,18 +5,22 @@ A complete IoT device management portal featuring device tracking, SIM card life
 
 ## Architecture
 - **Frontend**: Vue 3 with TypeScript and Vite
-- **Design System**: Modern professional UI template-based design (clean, minimal, functional)
+- **UI Framework**: PrimeVue 4 with Aura preset + IoTo custom theme
+- **CSS**: Tailwind CSS 4 with custom `@theme` variables
+- **Design System**: IoTo brand color system — warm beige light mode, navy dark mode, sage green primary
 - **Authentication**: Hardcoded admin system with localStorage persistence
-- **Data Layer**: Static mock data with TypeScript interfaces
-- **Build Tool**: Vite (fast development and optimized production builds)
-- **Deployment**: Vercel with automatic deployments
+- **Data Layer**: PostgreSQL (Supabase) with Express 5 API + mock data fallback
+- **Build Tool**: Vite 7 (fast development and optimized production builds)
+- **Deployment**: Docker (Proxmox) + Vercel
 
 ## Technology Stack
-- **Vue 3**: Modern, composition API-based frontend framework with `<script setup>`
-- **TypeScript**: Strict type-safe development with comprehensive interfaces
-- **Vite**: Lightning-fast build tool and development server
-- **CSS3**: Modern styling following professional UI template design (Roboto typography, gray-based color palette)
-- **localStorage**: Client-side authentication persistence
+- **Vue 3.5**: Modern, composition API-based frontend framework with `<script setup>`
+- **TypeScript 5.8**: Strict type-safe development with comprehensive interfaces
+- **PrimeVue 4**: Component library with Aura theme preset customized for IoTo brand
+- **Tailwind CSS 4**: Utility-first CSS with custom `@theme` design tokens
+- **Vite 7**: Lightning-fast build tool and development server
+- **Supabase**: PostgreSQL database with real-time capabilities
+- **localStorage**: Client-side authentication and UI state persistence
 
 ## Development Setup
 1. Clone the repository: `git clone https://github.com/tsavenkov/sim-card-portal-v2.git`
@@ -42,16 +46,15 @@ A complete IoT device management portal featuring device tracking, SIM card life
 - **Text Visibility**: Fixed password input visibility with explicit text color (#212529)
 - **Responsive**: Mobile-optimized login experience
 
-### Navigation Header
-- **Professional Design**: Light gray background (#f8f9fa) with clean typography
-- **Brand Identity**: "JT Digital Platform" with JT corporate logo (`src/assets/jt-logo.png`)
-- **Logo Implementation**: Consistent JT logo display across login and navigation components
-- **Tabbed Navigation**: 5 sections (Dashboard, Devices, SIMs, Policies, Support)
-- **Global Search**: Integrated search bar with magnifying glass icon
-- **Profile Management**: Letter-based avatar with dropdown menu
-  - User account information display
-  - Clean logout functionality with proper logout icon
-- **Responsive**: Mobile-optimized with condensed navigation
+### Navigation
+- **Sidebar Layout**: Collapsible sidebar (desktop) with IoTo brand icon and sage green active states
+- **Sidebar Background**: Uses `var(--app-sidebar-bg)` — beige in light mode, deepest navy in dark mode
+- **Topbar**: Page title, refresh, notifications, Ask Bob toggle; uses `var(--app-topbar-bg)`
+- **Sections**: Dashboard, Devices, SIM Cards, Consumption, Support, About, Settings
+- **Mobile Navigation**: Fixed bottom navigation bar (visible below `lg` breakpoint)
+- **Profile Management**: Letter-based avatar with user name/role card at sidebar bottom
+- **Collapse State**: Persisted to localStorage (`sim-portal-sidebar-collapsed`)
+- **Responsive**: Desktop sidebar + mobile bottom nav
 
 ### Dashboard (Home Page)
 - **Statistics Overview**: Real-time metrics in clean card layout
@@ -83,15 +86,18 @@ A complete IoT device management portal featuring device tracking, SIM card life
 - **Professional Colors**: Green/red status indicators
 - **Add SIM Button**: Consistent with device management
 
-### Modern Design System
-- **Color Palette**: Professional gray-based system
-  - Primary: #1f2937 (dark gray)
-  - Secondary: #6b7280 (medium gray)
-  - Background: #f9fafb (light gray)
-  - Success: #059669 (green)
-  - Error: #dc2626 (red)
-- **Typography**: Roboto font family with clean letter spacing
-- **Layout**: 8px border radius, subtle shadows, consistent spacing
+### IoTo Brand Design System
+- **Color System**: Dual-mode (light + dark) IoTo brand palette
+  - **Light mode**: Warm beige backgrounds (`#eeece7`), white surfaces, navy text (`#162237`)
+  - **Dark mode**: Navy backgrounds (`#162237`), dark navy surfaces (`#253854`), light text (`#f7f6f3`)
+  - **Primary action**: Sage green (`#7a907d` light / `#8fa892` dark)
+  - **Accent**: Bright blue (`#2790f1` light / `#4da3f5` dark)
+  - **Status colors**: Green (active), Red (offline), Amber (maintenance) — unchanged across modes
+- **Theme Engine**: PrimeVue `definePreset(Aura)` with sage green primary scale + CSS custom properties for runtime mode switching
+- **Dark Mode Toggle**: `.p-dark` class on `<html>` element (PrimeVue convention)
+- **Design Reference**: See `docs/ioto-color-concept.md` for complete token table
+- **Typography**: Inter font family with clean letter spacing
+- **Layout**: 8-12px border radius, subtle shadows, consistent spacing
 - **Interactive Elements**: Smooth transitions and hover states
 
 ### Project Structure
@@ -157,25 +163,46 @@ interface SIMCard {
 }
 ```
 
-## Design System - Professional UI Template
+## Design System — IoTo Brand Color System
 
-### Color Palette
-- **Primary Gray**: #1f2937 (main text, buttons, active states)
-- **Secondary Gray**: #6b7280 (secondary text, icons)
-- **Background**: #f8f9fa (page background), #f9fafb (card backgrounds)
-- **Borders**: #e5e7eb (subtle borders and dividers)
-- **Status Colors**: Green (#059669), Red (#dc2626), Orange (#d97706), Blue (#3b82f6)
+### Color Palette (Light Mode — Default)
+- **Page Background**: `#eeece7` (warm beige)
+- **Card Surfaces**: `#ffffff` (white)
+- **Sidebar**: `#e9e5db` (darker beige)
+- **Topbar**: `#ffffff` (white)
+- **Primary Text**: `#162237` (navy)
+- **Muted Text**: `#4a5568` (dark gray)
+- **Borders**: `#c8c3b7` (warm gray)
+- **Primary Action**: `#7a907d` (sage green)
+- **Accent**: `#2790f1` (bright blue)
+- **Status**: Green (#28a745), Red (#dc3545), Amber (#f5a623)
+
+### Color Palette (Dark Mode)
+- **Page Background**: `#162237` (navy)
+- **Card Surfaces**: `#253854` (dark navy)
+- **Sidebar/Topbar**: `#0d1520` (deepest navy)
+- **Primary Text**: `#f7f6f3` (off-white)
+- **Muted Text**: `#b8c2cf` (light steel)
+- **Borders**: `#2d3f5a` (navy border)
+- **Primary Action**: `#8fa892` (lighter sage green)
+- **Accent**: `#4da3f5` (light blue)
+- **Status**: Green (#48bb78), Red (#f56565), Amber (#f6c653)
+
+### Implementation
+- **PrimeVue**: Custom preset via `definePreset(Aura, { semantic: { primary: {...} } })` in `main.ts`
+- **CSS Variables**: Dual-mode tokens in `style.css` (`:root` for light, `html:root.p-dark` for dark)
+- **Tailwind**: `@theme` block defines build-time design tokens; runtime overrides via CSS custom properties
+- **Mode Toggle**: `.p-dark` class on `<html>` switches all `--background-dark`, `--surface-dark`, `--text-color`, etc.
 
 ### Typography
-- **Font Stack**: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif
-- **Hierarchy**: Clean size scaling with negative letter-spacing (-0.025em)
+- **Font Stack**: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif
 - **Weight**: 400 (regular), 500 (medium), 600 (semibold), 700 (bold)
-- **Monospace**: 'Monaco', 'Menlo', monospace (for technical data)
+- **Monospace**: 'Monaco', 'Menlo', monospace (for technical data like IMEI, ICCID)
 
 ### Layout Principles
 - **Modern Spacing**: Consistent 1rem, 1.5rem, 2rem grid
-- **Rounded Corners**: 6-8px border-radius for modern feel
-- **Subtle Shadows**: Clean box-shadow with 0.1 opacity
+- **Rounded Corners**: 8-12px border-radius for modern feel
+- **Subtle Shadows**: Clean box-shadow with mode-appropriate opacity
 - **Grid Layouts**: CSS Grid and Flexbox for responsive design
 
 ## Authentication Flow
@@ -237,12 +264,12 @@ interface SIMCard {
 - **Component Routing**: Conditional rendering of main sections
 
 ### Navigation.vue
-- **Professional Header**: Template-based design with tabbed navigation
-- **Brand Identity**: "JT Digital Platform" with JT corporate logo
-- **Global Search**: Integrated search functionality
-- **Profile Avatar**: Letter-based avatar (first letter of email)
-- **Profile Dropdown**: Account information and logout with proper icon
-- **Responsive**: Mobile-optimized navigation
+- **Collapsible Sidebar**: Desktop sidebar with IoTo brand icon, sage green active nav items
+- **Mode-Adaptive**: Background uses `var(--app-sidebar-bg)` (beige light / deepest navy dark)
+- **Profile Card**: Letter-based avatar with name and role display
+- **Logout Button**: Bottom of sidebar
+- **Mobile Bottom Nav**: Fixed bottom bar for small screens
+- **Responsive**: Sidebar hidden on mobile, bottom nav hidden on desktop
 
 ### WelcomePage.vue (Dashboard Home)
 - **Statistics**: Real-time computed values from mock data
@@ -296,18 +323,22 @@ See [DATABASE_INTEGRATION.md](DATABASE_INTEGRATION.md) for complete setup instru
 - **Bundle Analysis**: Regular bundle size monitoring
 
 ## Last Updated
-**Date**: August 15, 2025  
-**Version**: 2.0.0  
+**Date**: 29 January 2026
+**Version**: 2.1.0
 **Status**: Production Ready
 
-Complete IoT Device Management Portal implementation with professional JT corporate branding and UI template-based design. Features include:
+Complete IoT Device Management Portal implementation with IoTo Communications brand identity. Features include:
 - ✅ Secure authentication system with hardcoded admin credentials
-- ✅ Professional navigation with JT logo and brand identity
-- ✅ Device management with real-time status monitoring
+- ✅ Collapsible sidebar navigation with IoTo brand identity
+- ✅ IoTo brand color system — warm beige light mode, navy dark mode, sage green primary
+- ✅ PrimeVue 4 with custom `definePreset` for sage green primary scale
+- ✅ Device management with real-time status monitoring and Leaflet map
 - ✅ SIM card lifecycle management with usage tracking
-- ✅ Modern responsive design following JT corporate standards
-- ✅ TypeScript implementation with Vue 3 and Vite
-- ✅ Automated Vercel deployment pipeline
+- ✅ Consumption analytics with Ask Bob AI assistant
+- ✅ Modern responsive design with Tailwind CSS 4
+- ✅ TypeScript 5.8 with Vue 3.5 and Vite 7
+- ✅ Docker deployment (Proxmox) + Vercel deployment pipeline
+- ✅ WebSocket real-time device updates
 - ✅ Comprehensive documentation and development guides
 
-All core features implemented and tested. Logo displays correctly across all components. Ready for production deployment.
+All core features implemented and tested. Ready for production deployment.

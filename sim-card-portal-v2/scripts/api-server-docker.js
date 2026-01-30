@@ -1859,6 +1859,1829 @@ app.delete('/api/v1/api-clients/:clientId', async (req, res) => {
   }
 })
 
+// ============================================================================
+// SPRINT 3: ASSETS CRUD
+// ============================================================================
+
+// GET /api/assets - List assets
+app.get('/api/assets', async (req, res) => {
+  try {
+    const { status, customer_id, asset_type, search } = req.query
+    let query = `
+      SELECT a.*, d.name as device_name
+      FROM ${SCHEMA}assets a
+      LEFT JOIN ${SCHEMA}devices d ON a.device_id = d.id
+      WHERE a.deleted_at IS NULL
+    `
+    const params = []
+    let paramCount = 0
+
+    if (status) {
+      paramCount++
+      query += ` AND a.current_status = $${paramCount}`
+      params.push(status)
+    }
+    if (customer_id) {
+      paramCount++
+      query += ` AND a.customer_id = $${paramCount}`
+      params.push(customer_id)
+    }
+    if (asset_type) {
+      paramCount++
+      query += ` AND a.asset_type = $${paramCount}`
+      params.push(asset_type)
+    }
+    if (search) {
+      paramCount++
+      query += ` AND (a.name ILIKE $${paramCount} OR a.barcode ILIKE $${paramCount} OR a.asset_type ILIKE $${paramCount})`
+      params.push(`%${search}%`)
+    }
+
+    query += ' ORDER BY a.created_at DESC'
+
+    const result = await pool.query(query, params)
+    res.json({ success: true, data: toCamelCase(result.rows) })
+  } catch (error) {
+    console.error('Error fetching assets:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// GET /api/assets/:id - Get asset by ID
+app.get('/api/assets/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+    const result = await pool.query(`
+      SELECT a.*, d.name as device_name, d.latitude as device_latitude, d.longitude as device_longitude,
+             d.status as device_status, d.battery_level as device_battery
+      FROM ${SCHEMA}assets a
+      LEFT JOIN ${SCHEMA}devices d ON a.device_id = d.id
+      WHERE a.id = $1 AND a.deleted_at IS NULL
+    `, [id])
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Asset not found' })
+    }
+
+    res.json({ success: true, data: toCamelCase(result.rows[0]) })
+  } catch (error) {
+    console.error('Error fetching asset:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// POST /api/assets - Create asset
+app.post('/api/assets', async (req, res) => {
+  try {
+    const { name, assetType, barcode, customerId, projectId, currentStatus, birthDate, composition, recycledContent, certificationStatus, complianceExpiry, labels, metadata } = req.body
+
+    if (!name) {
+      return res.status(400).json({ success: false, error: 'Name is required' })
+    }
+
+    const result = await pool.query(`
+      INSERT INTO ${SCHEMA}assets (name, asset_type, barcode, customer_id, project_id, current_status, birth_date, composition, recycled_content, certification_status, compliance_expiry, labels, metadata)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      RETURNING *
+    `, [
+      name, assetType || null, barcode || null, customerId || null, projectId || null,
+      currentStatus || 'unknown', birthDate || null,
+      composition ? JSON.stringify(composition) : null,
+      recycledContent || 0, certificationStatus || null, complianceExpiry || null,
+      labels ? JSON.stringify(labels) : '[]',
+      metadata ? JSON.stringify(metadata) : '{}'
+    ])
+
+    res.status(201).json({ success: true, data: toCamelCase(result.rows[0]) })
+  } catch (error) {
+    console.error('Error creating asset:', error)
+    res.status(500).json({ success: false, error: 'Database error: ' + error.message })
+  }
+})
+
+// PUT /api/assets/:id - Update asset
+app.put('/api/assets/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+    const updates = req.body
+    const updateFields = []
+    const values = []
+    let paramCount = 0
+
+    const fieldMappings = {
+      name: 'name',
+      assetType: 'asset_type',
+      barcode: 'barcode',
+      customerId: 'customer_id',
+      projectId: 'project_id',
+      currentStatus: 'current_status',
+      birthDate: 'birth_date',
+      recycledContent: 'recycled_content',
+      certificationStatus: 'certification_status',
+      complianceExpiry: 'compliance_expiry',
+      tripCount: 'trip_count',
+      lastTripDate: 'last_trip_date'
+    }
+
+    for (const [camelKey, snakeKey] of Object.entries(fieldMappings)) {
+      if (updates[camelKey] !== undefined) {
+        paramCount++
+        updateFields.push(`${snakeKey} = $${paramCount}`)
+        values.push(updates[camelKey])
+      }
+    }
+
+    // Handle JSONB fields
+    if (updates.composition !== undefined) {
+      paramCount++
+      updateFields.push(`composition = $${paramCount}`)
+      values.push(JSON.stringify(updates.composition))
+    }
+    if (updates.labels !== undefined) {
+      paramCount++
+      updateFields.push(`labels = $${paramCount}`)
+      values.push(JSON.stringify(updates.labels))
+    }
+    if (updates.metadata !== undefined) {
+      paramCount++
+      updateFields.push(`metadata = $${paramCount}`)
+      values.push(JSON.stringify(updates.metadata))
+    }
+
+    if (updateFields.length === 0) {
+      return res.status(400).json({ success: false, error: 'No fields to update' })
+    }
+
+    paramCount++
+    updateFields.push(`updated_at = $${paramCount}`)
+    values.push(new Date().toISOString())
+
+    paramCount++
+    values.push(id)
+
+    const query = `UPDATE ${SCHEMA}assets SET ${updateFields.join(', ')} WHERE id = $${paramCount} AND deleted_at IS NULL RETURNING *`
+    const result = await pool.query(query, values)
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Asset not found' })
+    }
+
+    res.json({ success: true, data: toCamelCase(result.rows[0]) })
+  } catch (error) {
+    console.error('Error updating asset:', error)
+    res.status(500).json({ success: false, error: 'Database error: ' + error.message })
+  }
+})
+
+// DELETE /api/assets/:id - Soft delete asset
+app.delete('/api/assets/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+    const result = await pool.query(
+      `UPDATE ${SCHEMA}assets SET deleted_at = NOW(), updated_at = NOW() WHERE id = $1 AND deleted_at IS NULL RETURNING id`,
+      [id]
+    )
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Asset not found' })
+    }
+    res.json({ success: true, message: 'Asset deleted' })
+  } catch (error) {
+    console.error('Error deleting asset:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// POST /api/assets/:id/device - Associate device
+app.post('/api/assets/:id/device', async (req, res) => {
+  try {
+    const { id } = req.params
+    const { deviceId } = req.body
+    if (!deviceId) {
+      return res.status(400).json({ success: false, error: 'deviceId is required' })
+    }
+    const result = await pool.query(
+      `UPDATE ${SCHEMA}assets SET device_id = $1, updated_at = NOW() WHERE id = $2 AND deleted_at IS NULL RETURNING *`,
+      [deviceId, id]
+    )
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Asset not found' })
+    }
+    res.json({ success: true, data: toCamelCase(result.rows[0]) })
+  } catch (error) {
+    console.error('Error associating device:', error)
+    res.status(500).json({ success: false, error: 'Database error: ' + error.message })
+  }
+})
+
+// DELETE /api/assets/:id/device - Dissociate device
+app.delete('/api/assets/:id/device', async (req, res) => {
+  try {
+    const { id } = req.params
+    const result = await pool.query(
+      `UPDATE ${SCHEMA}assets SET device_id = NULL, updated_at = NOW() WHERE id = $1 AND deleted_at IS NULL RETURNING *`,
+      [id]
+    )
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Asset not found' })
+    }
+    res.json({ success: true, data: toCamelCase(result.rows[0]) })
+  } catch (error) {
+    console.error('Error dissociating device:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// ============================================================================
+// SPRINT 3: GEOZONES CRUD + SPATIAL
+// ============================================================================
+
+// GET /api/geozones - List geozones
+app.get('/api/geozones', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT g.id, g.tenant_id, g.customer_id, g.name, g.zone_type,
+             ST_AsGeoJSON(g.geometry) as geometry_geojson,
+             g.center_lat, g.center_lng, g.radius_meters, g.address,
+             g.owner_name, g.contact_name, g.contact_email, g.operating_hours,
+             g.is_active, g.hysteresis_meters, g.color,
+             g.created_at, g.updated_at,
+             (SELECT COUNT(*) FROM ${SCHEMA}assets a
+              LEFT JOIN ${SCHEMA}devices d ON a.device_id = d.id
+              WHERE d.latitude IS NOT NULL AND d.longitude IS NOT NULL
+              AND a.deleted_at IS NULL
+              AND ST_Contains(g.geometry, ST_SetSRID(ST_MakePoint(d.longitude::float, d.latitude::float), 4326))
+             ) as asset_count
+      FROM ${SCHEMA}geozones g
+      WHERE g.deleted_at IS NULL
+      ORDER BY g.created_at DESC
+    `)
+
+    const data = result.rows.map(row => ({
+      ...toCamelCase(row),
+      geometryGeojson: row.geometry_geojson ? JSON.parse(row.geometry_geojson) : null,
+      assetCount: parseInt(row.asset_count) || 0
+    }))
+
+    res.json({ success: true, data })
+  } catch (error) {
+    console.error('Error fetching geozones:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// GET /api/geozones/:id - Get geozone by ID
+app.get('/api/geozones/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+    const result = await pool.query(`
+      SELECT g.*, ST_AsGeoJSON(g.geometry) as geometry_geojson
+      FROM ${SCHEMA}geozones g
+      WHERE g.id = $1 AND g.deleted_at IS NULL
+    `, [id])
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Geozone not found' })
+    }
+
+    const row = result.rows[0]
+    const data = {
+      ...toCamelCase(row),
+      geometryGeojson: row.geometry_geojson ? JSON.parse(row.geometry_geojson) : null
+    }
+
+    res.json({ success: true, data })
+  } catch (error) {
+    console.error('Error fetching geozone:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// POST /api/geozones - Create geozone
+app.post('/api/geozones', async (req, res) => {
+  try {
+    const { name, zoneType, geometry, centerLat, centerLng, radiusMeters, address, ownerName, contactName, contactEmail, operatingHours, isActive, hysteresisMeters, color, customerId } = req.body
+
+    if (!name) {
+      return res.status(400).json({ success: false, error: 'Name is required' })
+    }
+
+    // Build geometry from polygon GeoJSON or circle params
+    let geometrySQL
+    const values = [name, zoneType || 'warehouse', centerLat || null, centerLng || null, radiusMeters || null, address || null, ownerName || null, contactName || null, contactEmail || null, operatingHours ? JSON.stringify(operatingHours) : null, isActive !== false, hysteresisMeters || 50, color || '#137fec', customerId || null]
+    let paramCount = values.length
+
+    if (geometry && geometry.type === 'Polygon') {
+      // GeoJSON polygon provided
+      paramCount++
+      geometrySQL = `ST_GeomFromGeoJSON($${paramCount})`
+      values.push(JSON.stringify(geometry))
+    } else if (centerLat && centerLng && radiusMeters) {
+      // Circle — generate buffer polygon from center point
+      geometrySQL = `ST_Buffer(ST_SetSRID(ST_MakePoint($4::float, $3::float), 4326)::geography, $5)::geometry`
+    } else {
+      geometrySQL = 'NULL'
+    }
+
+    const result = await pool.query(`
+      INSERT INTO ${SCHEMA}geozones (name, zone_type, center_lat, center_lng, radius_meters, address, owner_name, contact_name, contact_email, operating_hours, is_active, hysteresis_meters, color, customer_id, geometry)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, ${geometrySQL})
+      RETURNING *, ST_AsGeoJSON(geometry) as geometry_geojson
+    `, values)
+
+    const row = result.rows[0]
+    const data = {
+      ...toCamelCase(row),
+      geometryGeojson: row.geometry_geojson ? JSON.parse(row.geometry_geojson) : null
+    }
+
+    res.status(201).json({ success: true, data })
+  } catch (error) {
+    console.error('Error creating geozone:', error)
+    res.status(500).json({ success: false, error: 'Database error: ' + error.message })
+  }
+})
+
+// PUT /api/geozones/:id - Update geozone
+app.put('/api/geozones/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+    const updates = req.body
+    const updateFields = []
+    const values = []
+    let paramCount = 0
+
+    const fieldMappings = {
+      name: 'name',
+      zoneType: 'zone_type',
+      centerLat: 'center_lat',
+      centerLng: 'center_lng',
+      radiusMeters: 'radius_meters',
+      address: 'address',
+      ownerName: 'owner_name',
+      contactName: 'contact_name',
+      contactEmail: 'contact_email',
+      isActive: 'is_active',
+      hysteresisMeters: 'hysteresis_meters',
+      color: 'color',
+      customerId: 'customer_id'
+    }
+
+    for (const [camelKey, snakeKey] of Object.entries(fieldMappings)) {
+      if (updates[camelKey] !== undefined) {
+        paramCount++
+        updateFields.push(`${snakeKey} = $${paramCount}`)
+        values.push(updates[camelKey])
+      }
+    }
+
+    if (updates.operatingHours !== undefined) {
+      paramCount++
+      updateFields.push(`operating_hours = $${paramCount}`)
+      values.push(JSON.stringify(updates.operatingHours))
+    }
+
+    // Handle geometry update
+    if (updates.geometry && updates.geometry.type === 'Polygon') {
+      paramCount++
+      updateFields.push(`geometry = ST_GeomFromGeoJSON($${paramCount})`)
+      values.push(JSON.stringify(updates.geometry))
+    } else if (updates.centerLat && updates.centerLng && updates.radiusMeters) {
+      // Rebuild geometry from circle params (already added center_lat, center_lng, radius_meters above)
+      updateFields.push(`geometry = ST_Buffer(ST_SetSRID(ST_MakePoint(center_lng::float, center_lat::float), 4326)::geography, radius_meters)::geometry`)
+    }
+
+    if (updateFields.length === 0) {
+      return res.status(400).json({ success: false, error: 'No fields to update' })
+    }
+
+    paramCount++
+    updateFields.push(`updated_at = $${paramCount}`)
+    values.push(new Date().toISOString())
+
+    paramCount++
+    values.push(id)
+
+    const query = `UPDATE ${SCHEMA}geozones SET ${updateFields.join(', ')} WHERE id = $${paramCount} AND deleted_at IS NULL RETURNING *, ST_AsGeoJSON(geometry) as geometry_geojson`
+    const result = await pool.query(query, values)
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Geozone not found' })
+    }
+
+    const row = result.rows[0]
+    const data = {
+      ...toCamelCase(row),
+      geometryGeojson: row.geometry_geojson ? JSON.parse(row.geometry_geojson) : null
+    }
+
+    res.json({ success: true, data })
+  } catch (error) {
+    console.error('Error updating geozone:', error)
+    res.status(500).json({ success: false, error: 'Database error: ' + error.message })
+  }
+})
+
+// DELETE /api/geozones/:id - Soft delete geozone
+app.delete('/api/geozones/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+    const result = await pool.query(
+      `UPDATE ${SCHEMA}geozones SET deleted_at = NOW(), updated_at = NOW() WHERE id = $1 AND deleted_at IS NULL RETURNING id`,
+      [id]
+    )
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Geozone not found' })
+    }
+    res.json({ success: true, message: 'Geozone deleted' })
+  } catch (error) {
+    console.error('Error deleting geozone:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// GET /api/geozones/:id/assets - Assets inside geozone (spatial query)
+app.get('/api/geozones/:id/assets', async (req, res) => {
+  try {
+    const { id } = req.params
+    const result = await pool.query(`
+      SELECT a.*, d.name as device_name, d.latitude as device_latitude, d.longitude as device_longitude
+      FROM ${SCHEMA}assets a
+      JOIN ${SCHEMA}devices d ON a.device_id = d.id
+      JOIN ${SCHEMA}geozones g ON g.id = $1
+      WHERE a.deleted_at IS NULL
+        AND d.latitude IS NOT NULL AND d.longitude IS NOT NULL
+        AND ST_Contains(g.geometry, ST_SetSRID(ST_MakePoint(d.longitude::float, d.latitude::float), 4326))
+    `, [id])
+
+    res.json({ success: true, data: toCamelCase(result.rows) })
+  } catch (error) {
+    console.error('Error fetching geozone assets:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// ============================================================================
+// SPRINT 3: GEOZONE EVENTS
+// ============================================================================
+
+// GET /api/geozone-events - List events with filters
+app.get('/api/geozone-events', async (req, res) => {
+  try {
+    const { asset_id, geozone_id, event_type, from, to } = req.query
+    let query = `
+      SELECT e.*, a.name as asset_name, g.name as geozone_name
+      FROM ${SCHEMA}geozone_events e
+      LEFT JOIN ${SCHEMA}assets a ON e.asset_id = a.id
+      LEFT JOIN ${SCHEMA}geozones g ON e.geozone_id = g.id
+      WHERE 1=1
+    `
+    const params = []
+    let paramCount = 0
+
+    if (asset_id) {
+      paramCount++
+      query += ` AND e.asset_id = $${paramCount}`
+      params.push(asset_id)
+    }
+    if (geozone_id) {
+      paramCount++
+      query += ` AND e.geozone_id = $${paramCount}`
+      params.push(geozone_id)
+    }
+    if (event_type) {
+      paramCount++
+      query += ` AND e.event_type = $${paramCount}`
+      params.push(event_type)
+    }
+    if (from) {
+      paramCount++
+      query += ` AND e.occurred_at >= $${paramCount}`
+      params.push(from)
+    }
+    if (to) {
+      paramCount++
+      query += ` AND e.occurred_at <= $${paramCount}`
+      params.push(to)
+    }
+
+    query += ' ORDER BY e.occurred_at DESC LIMIT 100'
+
+    const result = await pool.query(query, params)
+    res.json({ success: true, data: toCamelCase(result.rows) })
+  } catch (error) {
+    console.error('Error fetching geozone events:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// POST /api/geozone-events/detect - Trigger geozone detection for a device position
+app.post('/api/geozone-events/detect', async (req, res) => {
+  try {
+    const { deviceId, latitude, longitude } = req.body
+    if (!deviceId || latitude === undefined || longitude === undefined) {
+      return res.status(400).json({ success: false, error: 'deviceId, latitude, and longitude are required' })
+    }
+
+    // Find all active geozones containing this point
+    const containsResult = await pool.query(`
+      SELECT g.id, g.name, g.zone_type
+      FROM ${SCHEMA}geozones g
+      WHERE g.is_active = true AND g.deleted_at IS NULL
+        AND ST_Contains(g.geometry, ST_SetSRID(ST_MakePoint($1::float, $2::float), 4326))
+    `, [longitude, latitude])
+
+    // Find asset linked to this device
+    const assetResult = await pool.query(
+      `SELECT id FROM ${SCHEMA}assets WHERE device_id = $1 AND deleted_at IS NULL`,
+      [deviceId]
+    )
+
+    const events = []
+    if (assetResult.rows.length > 0) {
+      const assetId = assetResult.rows[0].id
+      for (const zone of containsResult.rows) {
+        // Check if there's already an enter event (to avoid duplicates)
+        const existing = await pool.query(
+          `SELECT id FROM ${SCHEMA}geozone_events WHERE asset_id = $1 AND geozone_id = $2 AND event_type = 'zone_enter' ORDER BY occurred_at DESC LIMIT 1`,
+          [assetId, zone.id]
+        )
+        if (existing.rows.length === 0) {
+          const eventResult = await pool.query(`
+            INSERT INTO ${SCHEMA}geozone_events (asset_id, geozone_id, device_id, event_type, latitude, longitude)
+            VALUES ($1, $2, $3, 'zone_enter', $4, $5) RETURNING *
+          `, [assetId, zone.id, deviceId, latitude, longitude])
+          events.push(toCamelCase(eventResult.rows[0]))
+
+          // Sprint 4: Fire-and-forget alert detection for each created event
+          evaluateGeozoneEvent(eventResult.rows[0], null).catch(err => {
+            console.error('[Alert Detection] Fire-and-forget error:', err.message)
+          })
+        }
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        zonesContaining: containsResult.rows.map(z => ({ id: z.id, name: z.name, zoneType: z.zone_type })),
+        eventsCreated: events
+      }
+    })
+  } catch (error) {
+    console.error('Error detecting geozones:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// ============================================================================
+// SPRINT 3: ASSET TRIPS
+// ============================================================================
+
+// GET /api/asset-trips - List trips for an asset
+app.get('/api/asset-trips', async (req, res) => {
+  try {
+    const { asset_id } = req.query
+    let query = `
+      SELECT t.*,
+        og.name as origin_name, og.zone_type as origin_type,
+        dg.name as destination_name, dg.zone_type as destination_type,
+        a.name as asset_name
+      FROM ${SCHEMA}asset_trips t
+      LEFT JOIN ${SCHEMA}geozones og ON t.origin_geozone_id = og.id
+      LEFT JOIN ${SCHEMA}geozones dg ON t.destination_geozone_id = dg.id
+      LEFT JOIN ${SCHEMA}assets a ON t.asset_id = a.id
+      WHERE 1=1
+    `
+    const params = []
+    let paramCount = 0
+
+    if (asset_id) {
+      paramCount++
+      query += ` AND t.asset_id = $${paramCount}`
+      params.push(asset_id)
+    }
+
+    query += ' ORDER BY t.created_at DESC LIMIT 50'
+
+    const result = await pool.query(query, params)
+    res.json({ success: true, data: toCamelCase(result.rows) })
+  } catch (error) {
+    console.error('Error fetching asset trips:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// ============================================================================
+// SPRINT 3: CUSTOMER DASHBOARD
+// ============================================================================
+
+// GET /api/customer-dashboard/stats - Aggregated customer dashboard stats
+app.get('/api/customer-dashboard/stats', async (req, res) => {
+  try {
+    // Asset counts by status
+    const statusResult = await pool.query(`
+      SELECT current_status, COUNT(*) as count
+      FROM ${SCHEMA}assets
+      WHERE deleted_at IS NULL
+      GROUP BY current_status
+    `)
+
+    const statusCounts = {}
+    let totalAssets = 0
+    for (const row of statusResult.rows) {
+      statusCounts[row.current_status] = parseInt(row.count)
+      totalAssets += parseInt(row.count)
+    }
+
+    // Active geozones count
+    const geozoneResult = await pool.query(`
+      SELECT zone_type, COUNT(*) as count
+      FROM ${SCHEMA}geozones
+      WHERE deleted_at IS NULL AND is_active = true
+      GROUP BY zone_type
+    `)
+
+    const geozoneCounts = {}
+    let totalGeozones = 0
+    for (const row of geozoneResult.rows) {
+      geozoneCounts[row.zone_type] = parseInt(row.count)
+      totalGeozones += parseInt(row.count)
+    }
+
+    // Recent events (last 7 days)
+    const eventsResult = await pool.query(`
+      SELECT COUNT(*) as count
+      FROM ${SCHEMA}geozone_events
+      WHERE occurred_at >= NOW() - interval '7 days'
+    `)
+
+    // Active trips
+    const tripsResult = await pool.query(`
+      SELECT COUNT(*) as count
+      FROM ${SCHEMA}asset_trips
+      WHERE status = 'in_progress'
+    `)
+
+    // Assets with locations (for map)
+    const assetsWithLocResult = await pool.query(`
+      SELECT a.id, a.name, a.current_status, a.asset_type, a.barcode,
+             d.latitude, d.longitude
+      FROM ${SCHEMA}assets a
+      JOIN ${SCHEMA}devices d ON a.device_id = d.id
+      WHERE a.deleted_at IS NULL AND d.latitude IS NOT NULL AND d.longitude IS NOT NULL
+    `)
+
+    res.json({
+      success: true,
+      data: {
+        totalAssets,
+        assetsByStatus: statusCounts,
+        totalGeozones,
+        geozonesByType: geozoneCounts,
+        recentEventsCount: parseInt(eventsResult.rows[0]?.count) || 0,
+        activeTripsCount: parseInt(tripsResult.rows[0]?.count) || 0,
+        assetsWithLocation: toCamelCase(assetsWithLocResult.rows)
+      }
+    })
+  } catch (error) {
+    console.error('Error fetching customer dashboard stats:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// ============================================================================
+// SPRINT 4: ALERTS & GEOFENCING
+// ============================================================================
+
+// --- Status Inference Helpers ---
+
+const STATUS_INFERENCE_DEFAULTS = {
+  warehouse: 'at_facility',
+  supplier: 'at_supplier',
+  customer: 'at_customer',
+  transit_hub: 'in_transit',
+}
+
+const ZONE_TYPE_TO_ENTITY = {
+  warehouse: 'facility',
+  supplier: 'supplier',
+  customer: 'customer',
+  transit_hub: 'transit_hub',
+  restricted: 'restricted',
+}
+
+async function inferStatusFromZone(tenantId, zoneType) {
+  if (!zoneType) return 'unknown'
+  // Check DB for custom rule
+  const result = await pool.query(
+    `SELECT inferred_status FROM status_inference_rules WHERE (tenant_id = $1 OR tenant_id IS NULL) AND zone_type = $2 AND is_active = true ORDER BY tenant_id NULLS LAST LIMIT 1`,
+    [tenantId, zoneType]
+  )
+  if (result.rows.length > 0) return result.rows[0].inferred_status
+  return STATUS_INFERENCE_DEFAULTS[zoneType] || 'unknown'
+}
+
+async function recordStatusChange(assetId, previousStatus, newStatus, source, geozoneEventId, changedByUserId) {
+  await pool.query(
+    `INSERT INTO ${SCHEMA}asset_status_history (asset_id, previous_status, new_status, source, geozone_event_id, changed_by_user_id) VALUES ($1, $2, $3, $4, $5, $6)`,
+    [assetId, previousStatus, newStatus, source, geozoneEventId || null, changedByUserId || null]
+  )
+}
+
+async function logResponsibilityTransfer(assetId, tenantId, fromZone, toZone) {
+  // Calculate custody duration from previous transfer
+  const prevResult = await pool.query(
+    `SELECT transferred_at FROM ${SCHEMA}responsibility_transfers WHERE asset_id = $1 ORDER BY transferred_at DESC LIMIT 1`,
+    [assetId]
+  )
+  let custodyDuration = null
+  if (prevResult.rows.length > 0) {
+    custodyDuration = Math.round((Date.now() - new Date(prevResult.rows[0].transferred_at).getTime()) / 1000)
+  }
+
+  const fromEntityType = fromZone ? (ZONE_TYPE_TO_ENTITY[fromZone.zone_type] || fromZone.zone_type) : null
+  const toEntityType = toZone ? (ZONE_TYPE_TO_ENTITY[toZone.zone_type] || toZone.zone_type) : null
+
+  await pool.query(
+    `INSERT INTO ${SCHEMA}responsibility_transfers (asset_id, tenant_id, from_entity_type, from_entity_name, from_geozone_id, to_entity_type, to_entity_name, to_geozone_id, custody_duration_seconds)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    [
+      assetId, tenantId,
+      fromEntityType, fromZone?.name || null, fromZone?.id || null,
+      toEntityType, toZone?.name || null, toZone?.id || null,
+      custodyDuration
+    ]
+  )
+}
+
+async function evaluateGeozoneEvent(event, tenantId) {
+  try {
+    // 1. Look up geozone -> get zone_type
+    const geozoneResult = await pool.query(
+      `SELECT id, name, zone_type FROM ${SCHEMA}geozones WHERE id = $1`,
+      [event.geozone_id || event.geozoneId]
+    )
+    if (geozoneResult.rows.length === 0) return
+
+    const geozone = geozoneResult.rows[0]
+    const assetId = event.asset_id || event.assetId
+    const eventType = event.event_type || event.eventType
+
+    // 2. Status inference: infer status -> update asset if changed -> record history
+    const assetResult = await pool.query(
+      `SELECT id, current_status, tenant_id FROM ${SCHEMA}assets WHERE id = $1`,
+      [assetId]
+    )
+    if (assetResult.rows.length === 0) return
+
+    const asset = assetResult.rows[0]
+    const effectiveTenantId = tenantId || asset.tenant_id
+
+    if (eventType === 'zone_enter') {
+      const newStatus = await inferStatusFromZone(effectiveTenantId, geozone.zone_type)
+      if (newStatus && newStatus !== asset.current_status) {
+        await pool.query(
+          `UPDATE ${SCHEMA}assets SET current_status = $1, updated_at = NOW() WHERE id = $2`,
+          [newStatus, assetId]
+        )
+        await recordStatusChange(assetId, asset.current_status, newStatus, 'auto', event.id, null)
+      }
+
+      // 3. Responsibility transfer: derive entity type -> log transfer
+      // Find the previous zone (last zone_exit or zone_enter)
+      const prevEvent = await pool.query(
+        `SELECT ge.*, g.name as geozone_name, g.zone_type as geozone_zone_type
+         FROM ${SCHEMA}geozone_events ge
+         JOIN ${SCHEMA}geozones g ON ge.geozone_id = g.id
+         WHERE ge.asset_id = $1 AND ge.id != $2
+         ORDER BY ge.occurred_at DESC LIMIT 1`,
+        [assetId, event.id]
+      )
+
+      const fromZone = prevEvent.rows.length > 0 ? {
+        id: prevEvent.rows[0].geozone_id,
+        name: prevEvent.rows[0].geozone_name,
+        zone_type: prevEvent.rows[0].geozone_zone_type
+      } : null
+
+      await logResponsibilityTransfer(assetId, effectiveTenantId, fromZone, geozone)
+    }
+
+    // 4. Alert rule evaluation
+    const enabledRules = await pool.query(
+      `SELECT * FROM ${SCHEMA}alert_rules WHERE is_enabled = true AND deleted_at IS NULL AND trigger_type = $1 AND (tenant_id = $2 OR tenant_id IS NULL)`,
+      [eventType === 'zone_enter' ? 'zone_enter' : 'zone_exit', effectiveTenantId]
+    )
+
+    for (const rule of enabledRules.rows) {
+      const conditions = rule.conditions || {}
+
+      // Check conditions
+      if (conditions.zoneTypes && conditions.zoneTypes.length > 0) {
+        if (!conditions.zoneTypes.includes(geozone.zone_type)) continue
+      }
+      if (conditions.geozoneIds && conditions.geozoneIds.length > 0) {
+        if (!conditions.geozoneIds.includes(geozone.id)) continue
+      }
+      if (conditions.assetIds && conditions.assetIds.length > 0) {
+        if (!conditions.assetIds.includes(assetId)) continue
+      }
+
+      // Dedup check
+      const dedupKey = `${rule.trigger_type}:${assetId}:${geozone.id}`
+      const existingAlert = await pool.query(
+        `SELECT id FROM ${SCHEMA}alerts WHERE dedup_key = $1 AND status NOT IN ('resolved')`,
+        [dedupKey]
+      )
+      if (existingAlert.rows.length > 0) continue
+
+      // Create alert
+      const alertTitle = `${rule.name} - ${geozone.name}`
+      const alertDesc = rule.description || `Alert triggered for ${eventType} at ${geozone.name}`
+      const slaDeadline = new Date(Date.now() + (rule.cooldown_minutes || 60) * 60 * 1000)
+
+      const alertResult = await pool.query(
+        `INSERT INTO ${SCHEMA}alerts (tenant_id, alert_rule_id, asset_id, geozone_id, geozone_event_id, alert_type, severity, status, title, description, latitude, longitude, dedup_key, sla_deadline)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 'new', $8, $9, $10, $11, $12, $13) RETURNING *`,
+        [effectiveTenantId, rule.id, assetId, geozone.id, event.id, rule.trigger_type, rule.severity, alertTitle, alertDesc, event.latitude, event.longitude, dedupKey, slaDeadline]
+      )
+
+      const newAlert = alertResult.rows[0]
+
+      // Create alert history entry
+      await pool.query(
+        `INSERT INTO ${SCHEMA}alert_history (alert_id, from_status, to_status, comment) VALUES ($1, NULL, 'new', 'Alert created by system')`,
+        [newAlert.id]
+      )
+
+      // Create notifications
+      const actions = rule.actions || {}
+      if (actions.in_app !== false) {
+        await pool.query(
+          `INSERT INTO ${SCHEMA}notifications (tenant_id, alert_id, notification_type, channel, title, body) VALUES ($1, $2, 'alert_created', 'in_app', $3, $4)`,
+          [effectiveTenantId, newAlert.id, `${rule.severity.toUpperCase()}: ${alertTitle}`, alertDesc]
+        )
+      }
+      if (actions.email) {
+        console.log(`[MOCK EMAIL] To: recipients of rule "${rule.name}" | Subject: ${rule.severity.toUpperCase()}: ${alertTitle} | Body: ${alertDesc}`)
+        await pool.query(
+          `INSERT INTO ${SCHEMA}notifications (tenant_id, alert_id, notification_type, channel, title, body) VALUES ($1, $2, 'alert_created', 'email', $3, $4)`,
+          [effectiveTenantId, newAlert.id, `${rule.severity.toUpperCase()}: ${alertTitle}`, alertDesc]
+        )
+      }
+
+      console.log(`[Alert Detection] Created alert "${alertTitle}" (${rule.severity}) for rule "${rule.name}"`)
+    }
+  } catch (err) {
+    console.error('[Alert Detection] Error evaluating geozone event:', err.message)
+  }
+}
+
+// --- STATUS INFERENCE ENDPOINTS ---
+
+// GET /api/status-inference - List inference rules
+app.get('/api/status-inference', async (req, res) => {
+  try {
+    const { tenant_id } = req.query
+    const result = await pool.query(
+      `SELECT * FROM ${SCHEMA}status_inference_rules WHERE (tenant_id = $1 OR tenant_id IS NULL) AND is_active = true ORDER BY zone_type`,
+      [tenant_id || null]
+    )
+    res.json({ success: true, data: toCamelCase(result.rows) })
+  } catch (error) {
+    console.error('Error fetching inference rules:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// PUT /api/status-inference - Upsert inference rule
+app.put('/api/status-inference', async (req, res) => {
+  try {
+    const { tenantId, zoneType, inferredStatus, noZoneStatus, isActive } = req.body
+    const result = await pool.query(
+      `INSERT INTO ${SCHEMA}status_inference_rules (tenant_id, zone_type, inferred_status, no_zone_status, is_active)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (tenant_id, zone_type) DO UPDATE SET inferred_status = $3, no_zone_status = $4, is_active = $5, updated_at = NOW()
+       RETURNING *`,
+      [tenantId || null, zoneType, inferredStatus, noZoneStatus || 'unknown', isActive !== false]
+    )
+    res.json({ success: true, data: toCamelCase(result.rows[0]) })
+  } catch (error) {
+    console.error('Error upserting inference rule:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// GET /api/status-inference/assets/:id/status-history - Asset status history
+app.get('/api/status-inference/assets/:id/status-history', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT h.*, g.name as geozone_name, u.name as changed_by_name
+       FROM ${SCHEMA}asset_status_history h
+       LEFT JOIN ${SCHEMA}geozone_events ge ON h.geozone_event_id = ge.id
+       LEFT JOIN ${SCHEMA}geozones g ON ge.geozone_id = g.id
+       LEFT JOIN ${SCHEMA}users u ON h.changed_by_user_id = u.id
+       WHERE h.asset_id = $1
+       ORDER BY h.created_at DESC`,
+      [req.params.id]
+    )
+    res.json({ success: true, data: toCamelCase(result.rows) })
+  } catch (error) {
+    console.error('Error fetching status history:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// POST /api/status-inference/assets/:id/override-status - Manual status override
+app.post('/api/status-inference/assets/:id/override-status', async (req, res) => {
+  try {
+    const { newStatus, userId } = req.body
+    const assetId = req.params.id
+
+    const assetResult = await pool.query(
+      `SELECT current_status FROM ${SCHEMA}assets WHERE id = $1 AND deleted_at IS NULL`,
+      [assetId]
+    )
+    if (assetResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Asset not found' })
+    }
+
+    const previousStatus = assetResult.rows[0].current_status
+    await pool.query(
+      `UPDATE ${SCHEMA}assets SET current_status = $1, updated_at = NOW() WHERE id = $2`,
+      [newStatus, assetId]
+    )
+    await recordStatusChange(assetId, previousStatus, newStatus, 'manual', null, userId || null)
+
+    res.json({ success: true, data: { previousStatus, newStatus } })
+  } catch (error) {
+    console.error('Error overriding status:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// --- RESPONSIBILITY TRANSFER ENDPOINTS ---
+
+// GET /api/responsibility-transfers - List transfers
+app.get('/api/responsibility-transfers', async (req, res) => {
+  try {
+    const { asset_id, from, to } = req.query
+    let query = `
+      SELECT rt.*,
+        a.name as asset_name,
+        fg.name as from_geozone_name,
+        tg.name as to_geozone_name
+      FROM ${SCHEMA}responsibility_transfers rt
+      LEFT JOIN ${SCHEMA}assets a ON rt.asset_id = a.id
+      LEFT JOIN ${SCHEMA}geozones fg ON rt.from_geozone_id = fg.id
+      LEFT JOIN ${SCHEMA}geozones tg ON rt.to_geozone_id = tg.id
+      WHERE 1=1
+    `
+    const params = []
+    let paramCount = 0
+
+    if (asset_id) {
+      paramCount++
+      query += ` AND rt.asset_id = $${paramCount}`
+      params.push(asset_id)
+    }
+    if (from) {
+      paramCount++
+      query += ` AND rt.transferred_at >= $${paramCount}`
+      params.push(from)
+    }
+    if (to) {
+      paramCount++
+      query += ` AND rt.transferred_at <= $${paramCount}`
+      params.push(to)
+    }
+
+    query += ' ORDER BY rt.transferred_at DESC'
+    const result = await pool.query(query, params)
+    res.json({ success: true, data: toCamelCase(result.rows) })
+  } catch (error) {
+    console.error('Error fetching transfers:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// GET /api/responsibility-transfers/assets/:id - Transfers for specific asset
+app.get('/api/responsibility-transfers/assets/:id', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT rt.*,
+        fg.name as from_geozone_name,
+        tg.name as to_geozone_name
+       FROM ${SCHEMA}responsibility_transfers rt
+       LEFT JOIN ${SCHEMA}geozones fg ON rt.from_geozone_id = fg.id
+       LEFT JOIN ${SCHEMA}geozones tg ON rt.to_geozone_id = tg.id
+       WHERE rt.asset_id = $1
+       ORDER BY rt.transferred_at DESC`,
+      [req.params.id]
+    )
+    res.json({ success: true, data: toCamelCase(result.rows) })
+  } catch (error) {
+    console.error('Error fetching asset transfers:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// --- ALERT RULES ENDPOINTS ---
+
+// GET /api/alert-rules - List alert rules
+app.get('/api/alert-rules', async (req, res) => {
+  try {
+    const { trigger_type, is_enabled, search, tenant_id } = req.query
+    let query = `SELECT * FROM ${SCHEMA}alert_rules WHERE deleted_at IS NULL`
+    const params = []
+    let paramCount = 0
+
+    if (tenant_id) {
+      paramCount++
+      query += ` AND (tenant_id = $${paramCount} OR tenant_id IS NULL)`
+      params.push(tenant_id)
+    }
+    if (trigger_type) {
+      paramCount++
+      query += ` AND trigger_type = $${paramCount}`
+      params.push(trigger_type)
+    }
+    if (is_enabled !== undefined) {
+      paramCount++
+      query += ` AND is_enabled = $${paramCount}`
+      params.push(is_enabled === 'true')
+    }
+    if (search) {
+      paramCount++
+      query += ` AND (name ILIKE $${paramCount} OR description ILIKE $${paramCount})`
+      params.push(`%${search}%`)
+    }
+
+    query += ' ORDER BY created_at DESC'
+    const result = await pool.query(query, params)
+    res.json({ success: true, data: toCamelCase(result.rows) })
+  } catch (error) {
+    console.error('Error fetching alert rules:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// GET /api/alert-rules/:id - Get alert rule by ID
+app.get('/api/alert-rules/:id', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM ${SCHEMA}alert_rules WHERE id = $1 AND deleted_at IS NULL`,
+      [req.params.id]
+    )
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Alert rule not found' })
+    }
+    res.json({ success: true, data: toCamelCase(result.rows[0]) })
+  } catch (error) {
+    console.error('Error fetching alert rule:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// POST /api/alert-rules - Create alert rule
+app.post('/api/alert-rules', async (req, res) => {
+  try {
+    const { tenantId, name, description, triggerType, severity, conditions, actions, recipients, isEnabled, cooldownMinutes } = req.body
+    if (!name || !triggerType) {
+      return res.status(400).json({ success: false, error: 'name and triggerType are required' })
+    }
+    const result = await pool.query(
+      `INSERT INTO ${SCHEMA}alert_rules (tenant_id, name, description, trigger_type, severity, conditions, actions, recipients, is_enabled, cooldown_minutes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+      [tenantId || null, name, description || null, triggerType, severity || 'medium',
+       JSON.stringify(conditions || {}), JSON.stringify(actions || { email: true, in_app: true }),
+       JSON.stringify(recipients || []), isEnabled !== false, cooldownMinutes || 60]
+    )
+    res.status(201).json({ success: true, data: toCamelCase(result.rows[0]) })
+  } catch (error) {
+    console.error('Error creating alert rule:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// PUT /api/alert-rules/:id - Update alert rule
+app.put('/api/alert-rules/:id', async (req, res) => {
+  try {
+    const { name, description, triggerType, severity, conditions, actions, recipients, isEnabled, cooldownMinutes } = req.body
+    const updateFields = []
+    const values = []
+    let paramCount = 0
+
+    const fieldMappings = {
+      name: 'name', description: 'description', triggerType: 'trigger_type',
+      severity: 'severity', isEnabled: 'is_enabled', cooldownMinutes: 'cooldown_minutes'
+    }
+
+    for (const [camelKey, snakeKey] of Object.entries(fieldMappings)) {
+      if (req.body[camelKey] !== undefined) {
+        paramCount++
+        updateFields.push(`${snakeKey} = $${paramCount}`)
+        values.push(req.body[camelKey])
+      }
+    }
+
+    // JSONB fields
+    if (conditions !== undefined) {
+      paramCount++
+      updateFields.push(`conditions = $${paramCount}`)
+      values.push(JSON.stringify(conditions))
+    }
+    if (actions !== undefined) {
+      paramCount++
+      updateFields.push(`actions = $${paramCount}`)
+      values.push(JSON.stringify(actions))
+    }
+    if (recipients !== undefined) {
+      paramCount++
+      updateFields.push(`recipients = $${paramCount}`)
+      values.push(JSON.stringify(recipients))
+    }
+
+    if (updateFields.length === 0) {
+      return res.status(400).json({ success: false, error: 'No fields to update' })
+    }
+
+    paramCount++
+    updateFields.push(`updated_at = $${paramCount}`)
+    values.push(new Date().toISOString())
+
+    paramCount++
+    values.push(req.params.id)
+
+    const query = `UPDATE ${SCHEMA}alert_rules SET ${updateFields.join(', ')} WHERE id = $${paramCount} AND deleted_at IS NULL RETURNING *`
+    const result = await pool.query(query, values)
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Alert rule not found' })
+    }
+    res.json({ success: true, data: toCamelCase(result.rows[0]) })
+  } catch (error) {
+    console.error('Error updating alert rule:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// DELETE /api/alert-rules/:id - Soft delete alert rule
+app.delete('/api/alert-rules/:id', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `UPDATE ${SCHEMA}alert_rules SET deleted_at = NOW(), updated_at = NOW() WHERE id = $1 AND deleted_at IS NULL RETURNING id`,
+      [req.params.id]
+    )
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Alert rule not found' })
+    }
+    res.json({ success: true, data: { id: result.rows[0].id } })
+  } catch (error) {
+    console.error('Error deleting alert rule:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// POST /api/alert-rules/:id/clone - Clone alert rule
+app.post('/api/alert-rules/:id/clone', async (req, res) => {
+  try {
+    const original = await pool.query(
+      `SELECT * FROM ${SCHEMA}alert_rules WHERE id = $1 AND deleted_at IS NULL`,
+      [req.params.id]
+    )
+    if (original.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Alert rule not found' })
+    }
+    const r = original.rows[0]
+    const result = await pool.query(
+      `INSERT INTO ${SCHEMA}alert_rules (tenant_id, name, description, trigger_type, severity, conditions, actions, recipients, is_enabled, cooldown_minutes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false, $9) RETURNING *`,
+      [r.tenant_id, r.name + ' (Copy)', r.description, r.trigger_type, r.severity,
+       JSON.stringify(r.conditions), JSON.stringify(r.actions), JSON.stringify(r.recipients), r.cooldown_minutes]
+    )
+    res.status(201).json({ success: true, data: toCamelCase(result.rows[0]) })
+  } catch (error) {
+    console.error('Error cloning alert rule:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// PUT /api/alert-rules/:id/toggle - Toggle alert rule enabled/disabled
+app.put('/api/alert-rules/:id/toggle', async (req, res) => {
+  try {
+    const { isEnabled } = req.body
+    const result = await pool.query(
+      `UPDATE ${SCHEMA}alert_rules SET is_enabled = $1, updated_at = NOW() WHERE id = $2 AND deleted_at IS NULL RETURNING *`,
+      [isEnabled, req.params.id]
+    )
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Alert rule not found' })
+    }
+    res.json({ success: true, data: toCamelCase(result.rows[0]) })
+  } catch (error) {
+    console.error('Error toggling alert rule:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// POST /api/alert-rules/import - Import rules from JSON array
+app.post('/api/alert-rules/import', async (req, res) => {
+  try {
+    const rules = req.body.rules || req.body
+    if (!Array.isArray(rules)) {
+      return res.status(400).json({ success: false, error: 'Expected an array of rules' })
+    }
+    const imported = []
+    for (const r of rules) {
+      const result = await pool.query(
+        `INSERT INTO ${SCHEMA}alert_rules (tenant_id, name, description, trigger_type, severity, conditions, actions, recipients, is_enabled, cooldown_minutes)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+        [r.tenantId || null, r.name, r.description || null, r.triggerType, r.severity || 'medium',
+         JSON.stringify(r.conditions || {}), JSON.stringify(r.actions || {}),
+         JSON.stringify(r.recipients || []), r.isEnabled !== false, r.cooldownMinutes || 60]
+      )
+      imported.push(toCamelCase(result.rows[0]))
+    }
+    res.status(201).json({ success: true, data: imported })
+  } catch (error) {
+    console.error('Error importing alert rules:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// GET /api/alert-rules/:id/export - Export single rule as JSON
+app.get('/api/alert-rules/:id/export', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM ${SCHEMA}alert_rules WHERE id = $1 AND deleted_at IS NULL`,
+      [req.params.id]
+    )
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Alert rule not found' })
+    }
+    const r = result.rows[0]
+    res.json({
+      name: r.name, description: r.description, triggerType: r.trigger_type, severity: r.severity,
+      conditions: r.conditions, actions: r.actions, recipients: r.recipients,
+      isEnabled: r.is_enabled, cooldownMinutes: r.cooldown_minutes
+    })
+  } catch (error) {
+    console.error('Error exporting alert rule:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// POST /api/alert-rules/:id/test - Test rule with simulated event
+app.post('/api/alert-rules/:id/test', async (req, res) => {
+  try {
+    const rule = await pool.query(
+      `SELECT * FROM ${SCHEMA}alert_rules WHERE id = $1 AND deleted_at IS NULL`,
+      [req.params.id]
+    )
+    if (rule.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Alert rule not found' })
+    }
+    const r = rule.rows[0]
+    const { assetId, geozoneId, latitude, longitude } = req.body
+
+    // Simulate matching logic
+    const conditions = r.conditions || {}
+    let wouldTrigger = true
+    const reasons = []
+
+    if (conditions.zoneTypes && conditions.zoneTypes.length > 0 && geozoneId) {
+      const gz = await pool.query(`SELECT zone_type FROM ${SCHEMA}geozones WHERE id = $1`, [geozoneId])
+      if (gz.rows.length > 0 && !conditions.zoneTypes.includes(gz.rows[0].zone_type)) {
+        wouldTrigger = false
+        reasons.push(`Zone type "${gz.rows[0].zone_type}" not in rule zone types`)
+      }
+    }
+    if (conditions.assetIds && conditions.assetIds.length > 0 && assetId) {
+      if (!conditions.assetIds.includes(assetId)) {
+        wouldTrigger = false
+        reasons.push('Asset ID not in rule asset list')
+      }
+    }
+    if (conditions.geozoneIds && conditions.geozoneIds.length > 0 && geozoneId) {
+      if (!conditions.geozoneIds.includes(geozoneId)) {
+        wouldTrigger = false
+        reasons.push('Geozone ID not in rule geozone list')
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        wouldTrigger,
+        rule: toCamelCase(r),
+        reasons: wouldTrigger ? ['All conditions matched'] : reasons
+      }
+    })
+  } catch (error) {
+    console.error('Error testing alert rule:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// --- ALERTS ENDPOINTS ---
+
+// GET /api/alerts - List alerts with filters
+app.get('/api/alerts', async (req, res) => {
+  try {
+    const { status, severity, type, from, to, assigned_to, asset_id, geozone_id, search, tenant_id, limit, offset } = req.query
+    let query = `
+      SELECT al.*,
+        a.name as asset_name, a.barcode as asset_barcode,
+        g.name as geozone_name, g.zone_type as geozone_zone_type,
+        ar.name as rule_name,
+        u.name as assigned_to_name
+      FROM ${SCHEMA}alerts al
+      LEFT JOIN ${SCHEMA}assets a ON al.asset_id = a.id
+      LEFT JOIN ${SCHEMA}geozones g ON al.geozone_id = g.id
+      LEFT JOIN ${SCHEMA}alert_rules ar ON al.alert_rule_id = ar.id
+      LEFT JOIN ${SCHEMA}users u ON al.assigned_to = u.id
+      WHERE 1=1
+    `
+    const params = []
+    let paramCount = 0
+
+    if (tenant_id) {
+      paramCount++
+      query += ` AND al.tenant_id = $${paramCount}`
+      params.push(tenant_id)
+    }
+    if (status) {
+      const statuses = status.split(',')
+      paramCount++
+      query += ` AND al.status = ANY($${paramCount})`
+      params.push(statuses)
+    }
+    if (severity) {
+      const severities = severity.split(',')
+      paramCount++
+      query += ` AND al.severity = ANY($${paramCount})`
+      params.push(severities)
+    }
+    if (type) {
+      paramCount++
+      query += ` AND al.alert_type = $${paramCount}`
+      params.push(type)
+    }
+    if (from) {
+      paramCount++
+      query += ` AND al.created_at >= $${paramCount}`
+      params.push(from)
+    }
+    if (to) {
+      paramCount++
+      query += ` AND al.created_at <= $${paramCount}`
+      params.push(to)
+    }
+    if (assigned_to) {
+      paramCount++
+      query += ` AND al.assigned_to = $${paramCount}`
+      params.push(assigned_to)
+    }
+    if (asset_id) {
+      paramCount++
+      query += ` AND al.asset_id = $${paramCount}`
+      params.push(asset_id)
+    }
+    if (geozone_id) {
+      paramCount++
+      query += ` AND al.geozone_id = $${paramCount}`
+      params.push(geozone_id)
+    }
+    if (search) {
+      paramCount++
+      query += ` AND (al.title ILIKE $${paramCount} OR al.description ILIKE $${paramCount} OR a.name ILIKE $${paramCount})`
+      params.push(`%${search}%`)
+    }
+
+    query += ' ORDER BY al.created_at DESC'
+
+    if (limit) {
+      paramCount++
+      query += ` LIMIT $${paramCount}`
+      params.push(parseInt(limit))
+    }
+    if (offset) {
+      paramCount++
+      query += ` OFFSET $${paramCount}`
+      params.push(parseInt(offset))
+    }
+
+    const result = await pool.query(query, params)
+    res.json({ success: true, data: toCamelCase(result.rows) })
+  } catch (error) {
+    console.error('Error fetching alerts:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// GET /api/alerts/stats - Dashboard summary stats
+app.get('/api/alerts/stats', async (req, res) => {
+  try {
+    const { tenant_id } = req.query
+    const tenantFilter = tenant_id ? `AND tenant_id = '${tenant_id}'` : ''
+
+    // Status counts
+    const statusResult = await pool.query(`
+      SELECT status, COUNT(*) as count FROM ${SCHEMA}alerts WHERE 1=1 ${tenantFilter} GROUP BY status
+    `)
+    const byStatus = {}
+    let total = 0
+    for (const row of statusResult.rows) {
+      byStatus[row.status] = parseInt(row.count)
+      total += parseInt(row.count)
+    }
+
+    // Severity counts
+    const severityResult = await pool.query(`
+      SELECT severity, COUNT(*) as count FROM ${SCHEMA}alerts WHERE status != 'resolved' ${tenantFilter} GROUP BY severity
+    `)
+    const bySeverity = {}
+    for (const row of severityResult.rows) {
+      bySeverity[row.severity] = parseInt(row.count)
+    }
+
+    // Avg resolution time (for resolved alerts)
+    const avgResult = await pool.query(`
+      SELECT AVG(EXTRACT(EPOCH FROM (resolved_at - created_at))) as avg_seconds
+      FROM ${SCHEMA}alerts
+      WHERE status = 'resolved' AND resolved_at IS NOT NULL ${tenantFilter}
+    `)
+    const avgResolutionSeconds = parseFloat(avgResult.rows[0]?.avg_seconds) || 0
+
+    // Unresolved count
+    const unresolvedResult = await pool.query(`
+      SELECT COUNT(*) as count FROM ${SCHEMA}alerts WHERE status NOT IN ('resolved') ${tenantFilter}
+    `)
+    const unresolved = parseInt(unresolvedResult.rows[0]?.count) || 0
+
+    // Trend data (last 7 days)
+    const trendResult = await pool.query(`
+      SELECT DATE(created_at) as date, COUNT(*) as count
+      FROM ${SCHEMA}alerts
+      WHERE created_at >= NOW() - INTERVAL '7 days' ${tenantFilter}
+      GROUP BY DATE(created_at)
+      ORDER BY DATE(created_at)
+    `)
+
+    res.json({
+      success: true,
+      data: {
+        total,
+        byStatus,
+        bySeverity,
+        unresolved,
+        avgResolutionSeconds: Math.round(avgResolutionSeconds),
+        avgResolutionMinutes: Math.round(avgResolutionSeconds / 60),
+        trend: trendResult.rows.map(r => ({ date: r.date, count: parseInt(r.count) }))
+      }
+    })
+  } catch (error) {
+    console.error('Error fetching alert stats:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// GET /api/alerts/:id - Alert detail
+app.get('/api/alerts/:id', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT al.*,
+        a.name as asset_name, a.barcode as asset_barcode, a.current_status as asset_status,
+        g.name as geozone_name, g.zone_type as geozone_zone_type, ST_AsGeoJSON(g.geometry) as geozone_geometry,
+        g.center_lat as geozone_center_lat, g.center_lng as geozone_center_lng, g.color as geozone_color,
+        ar.name as rule_name, ar.trigger_type as rule_trigger_type, ar.severity as rule_severity,
+        u.name as assigned_to_name
+      FROM ${SCHEMA}alerts al
+      LEFT JOIN ${SCHEMA}assets a ON al.asset_id = a.id
+      LEFT JOIN ${SCHEMA}geozones g ON al.geozone_id = g.id
+      LEFT JOIN ${SCHEMA}alert_rules ar ON al.alert_rule_id = ar.id
+      LEFT JOIN ${SCHEMA}users u ON al.assigned_to = u.id
+      WHERE al.id = $1
+    `, [req.params.id])
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Alert not found' })
+    }
+    res.json({ success: true, data: toCamelCase(result.rows[0]) })
+  } catch (error) {
+    console.error('Error fetching alert:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// GET /api/alerts/:id/history - Alert audit trail
+app.get('/api/alerts/:id/history', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT h.*, u.name as changed_by_name
+      FROM ${SCHEMA}alert_history h
+      LEFT JOIN ${SCHEMA}users u ON h.changed_by = u.id
+      WHERE h.alert_id = $1
+      ORDER BY h.created_at ASC
+    `, [req.params.id])
+    res.json({ success: true, data: toCamelCase(result.rows) })
+  } catch (error) {
+    console.error('Error fetching alert history:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// PUT /api/alerts/:id/transition - Change alert status
+app.put('/api/alerts/:id/transition', async (req, res) => {
+  try {
+    const { status, comment, assignedTo, snoozedUntil } = req.body
+    if (!status) {
+      return res.status(400).json({ success: false, error: 'status is required' })
+    }
+
+    const currentAlert = await pool.query(
+      `SELECT * FROM ${SCHEMA}alerts WHERE id = $1`,
+      [req.params.id]
+    )
+    if (currentAlert.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Alert not found' })
+    }
+
+    const fromStatus = currentAlert.rows[0].status
+    const updateFields = ['status = $1', 'updated_at = NOW()']
+    const values = [status]
+    let paramCount = 1
+
+    if (assignedTo !== undefined) {
+      paramCount++
+      updateFields.push(`assigned_to = $${paramCount}`)
+      values.push(assignedTo || null)
+    }
+    if (snoozedUntil) {
+      paramCount++
+      updateFields.push(`snoozed_until = $${paramCount}`)
+      values.push(snoozedUntil)
+    }
+    if (status === 'resolved') {
+      updateFields.push('resolved_at = NOW()')
+    }
+
+    paramCount++
+    values.push(req.params.id)
+
+    const result = await pool.query(
+      `UPDATE ${SCHEMA}alerts SET ${updateFields.join(', ')} WHERE id = $${paramCount} RETURNING *`,
+      values
+    )
+
+    // Record history
+    await pool.query(
+      `INSERT INTO ${SCHEMA}alert_history (alert_id, from_status, to_status, comment) VALUES ($1, $2, $3, $4)`,
+      [req.params.id, fromStatus, status, comment || null]
+    )
+
+    res.json({ success: true, data: toCamelCase(result.rows[0]) })
+  } catch (error) {
+    console.error('Error transitioning alert:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// POST /api/alerts/bulk-transition - Bulk status change
+app.post('/api/alerts/bulk-transition', async (req, res) => {
+  try {
+    const { ids, status, comment, assignedTo } = req.body
+    if (!ids || !Array.isArray(ids) || ids.length === 0 || !status) {
+      return res.status(400).json({ success: false, error: 'ids array and status are required' })
+    }
+
+    const updated = []
+    for (const id of ids) {
+      const currentAlert = await pool.query(`SELECT status FROM ${SCHEMA}alerts WHERE id = $1`, [id])
+      if (currentAlert.rows.length === 0) continue
+
+      const fromStatus = currentAlert.rows[0].status
+      const updateFields = ['status = $1', 'updated_at = NOW()']
+      const values = [status]
+      let paramCount = 1
+
+      if (assignedTo !== undefined) {
+        paramCount++
+        updateFields.push(`assigned_to = $${paramCount}`)
+        values.push(assignedTo || null)
+      }
+      if (status === 'resolved') {
+        updateFields.push('resolved_at = NOW()')
+      }
+
+      paramCount++
+      values.push(id)
+
+      const result = await pool.query(
+        `UPDATE ${SCHEMA}alerts SET ${updateFields.join(', ')} WHERE id = $${paramCount} RETURNING *`,
+        values
+      )
+      if (result.rows.length > 0) updated.push(toCamelCase(result.rows[0]))
+
+      await pool.query(
+        `INSERT INTO ${SCHEMA}alert_history (alert_id, from_status, to_status, comment) VALUES ($1, $2, $3, $4)`,
+        [id, fromStatus, status, comment || `Bulk transition to ${status}`]
+      )
+    }
+
+    res.json({ success: true, data: updated })
+  } catch (error) {
+    console.error('Error bulk transitioning alerts:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// POST /api/alerts/check-overdue - Trigger overdue scan
+app.post('/api/alerts/check-overdue', async (req, res) => {
+  try {
+    // Find in_progress trips that are overdue
+    const overdueTrips = await pool.query(`
+      SELECT t.*, a.name as asset_name, a.tenant_id
+      FROM ${SCHEMA}asset_trips t
+      JOIN ${SCHEMA}assets a ON t.asset_id = a.id
+      WHERE t.status = 'in_progress'
+        AND t.departed_at < NOW() - INTERVAL '2 hours'
+    `)
+
+    const alertsCreated = []
+    for (const trip of overdueTrips.rows) {
+      // Check for arrival_overdue rules
+      const rules = await pool.query(
+        `SELECT * FROM ${SCHEMA}alert_rules WHERE trigger_type = 'arrival_overdue' AND is_enabled = true AND deleted_at IS NULL AND (tenant_id = $1 OR tenant_id IS NULL)`,
+        [trip.tenant_id]
+      )
+
+      for (const rule of rules.rows) {
+        const gracePeriod = (rule.conditions?.gracePeriodMinutes || 120) * 60 * 1000
+        const tripDuration = Date.now() - new Date(trip.departed_at).getTime()
+        if (tripDuration < gracePeriod) continue
+
+        const dedupKey = `arrival_overdue:${trip.asset_id}:${trip.id}`
+        const existing = await pool.query(
+          `SELECT id FROM ${SCHEMA}alerts WHERE dedup_key = $1 AND status NOT IN ('resolved')`,
+          [dedupKey]
+        )
+        if (existing.rows.length > 0) continue
+
+        const slaDeadline = new Date(Date.now() + (rule.cooldown_minutes || 120) * 60 * 1000)
+        const alertResult = await pool.query(
+          `INSERT INTO ${SCHEMA}alerts (tenant_id, alert_rule_id, asset_id, alert_type, severity, status, title, description, dedup_key, sla_deadline)
+           VALUES ($1, $2, $3, 'arrival_overdue', $4, 'new', $5, $6, $7, $8) RETURNING *`,
+          [trip.tenant_id, rule.id, trip.asset_id, rule.severity,
+           `Arrival Overdue - ${trip.asset_name || 'Unknown Asset'}`,
+           `Trip departed at ${trip.departed_at} has not yet arrived at destination.`,
+           dedupKey, slaDeadline]
+        )
+
+        await pool.query(
+          `INSERT INTO ${SCHEMA}alert_history (alert_id, from_status, to_status, comment) VALUES ($1, NULL, 'new', 'Alert created by overdue check')`,
+          [alertResult.rows[0].id]
+        )
+        alertsCreated.push(toCamelCase(alertResult.rows[0]))
+      }
+    }
+
+    res.json({ success: true, data: { overdueTrips: overdueTrips.rows.length, alertsCreated: alertsCreated.length, alerts: alertsCreated } })
+  } catch (error) {
+    console.error('Error checking overdue:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// --- NOTIFICATION ENDPOINTS ---
+
+// GET /api/notifications - List notifications
+app.get('/api/notifications', async (req, res) => {
+  try {
+    const { is_read, limit: lim, user_id } = req.query
+    let query = `
+      SELECT n.*, al.title as alert_title, al.severity as alert_severity
+      FROM ${SCHEMA}notifications n
+      LEFT JOIN ${SCHEMA}alerts al ON n.alert_id = al.id
+      WHERE 1=1
+    `
+    const params = []
+    let paramCount = 0
+
+    if (user_id) {
+      paramCount++
+      query += ` AND (n.user_id = $${paramCount} OR n.user_id IS NULL)`
+      params.push(user_id)
+    }
+    if (is_read !== undefined) {
+      paramCount++
+      query += ` AND n.is_read = $${paramCount}`
+      params.push(is_read === 'true')
+    }
+
+    query += ' ORDER BY n.created_at DESC'
+
+    if (lim) {
+      paramCount++
+      query += ` LIMIT $${paramCount}`
+      params.push(parseInt(lim))
+    }
+
+    const result = await pool.query(query, params)
+    res.json({ success: true, data: toCamelCase(result.rows) })
+  } catch (error) {
+    console.error('Error fetching notifications:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// GET /api/notifications/unread-count - Unread count
+app.get('/api/notifications/unread-count', async (req, res) => {
+  try {
+    const { user_id } = req.query
+    let query = `SELECT COUNT(*) as count FROM ${SCHEMA}notifications WHERE is_read = false`
+    const params = []
+    if (user_id) {
+      query += ` AND (user_id = $1 OR user_id IS NULL)`
+      params.push(user_id)
+    }
+    const result = await pool.query(query, params)
+    res.json({ success: true, data: { count: parseInt(result.rows[0]?.count) || 0 } })
+  } catch (error) {
+    console.error('Error fetching unread count:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// PUT /api/notifications/:id/read - Mark single notification read
+app.put('/api/notifications/:id/read', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `UPDATE ${SCHEMA}notifications SET is_read = true WHERE id = $1 RETURNING *`,
+      [req.params.id]
+    )
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Notification not found' })
+    }
+    res.json({ success: true, data: toCamelCase(result.rows[0]) })
+  } catch (error) {
+    console.error('Error marking notification read:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// PUT /api/notifications/read-all - Mark all notifications read
+app.put('/api/notifications/read-all', async (req, res) => {
+  try {
+    const { user_id } = req.body
+    let query = `UPDATE ${SCHEMA}notifications SET is_read = true WHERE is_read = false`
+    const params = []
+    if (user_id) {
+      query += ` AND (user_id = $1 OR user_id IS NULL)`
+      params.push(user_id)
+    }
+    const result = await pool.query(query, params)
+    res.json({ success: true, data: { updated: result.rowCount } })
+  } catch (error) {
+    console.error('Error marking all read:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// GET /api/notifications/preferences - Get notification preferences
+app.get('/api/notifications/preferences', async (req, res) => {
+  try {
+    const { user_id, tenant_id } = req.query
+    const result = await pool.query(
+      `SELECT * FROM ${SCHEMA}notification_preferences WHERE (user_id = $1 OR user_id IS NULL) AND (tenant_id = $2 OR tenant_id IS NULL)`,
+      [user_id || null, tenant_id || null]
+    )
+    res.json({ success: true, data: toCamelCase(result.rows) })
+  } catch (error) {
+    console.error('Error fetching preferences:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// PUT /api/notifications/preferences - Upsert notification preference
+app.put('/api/notifications/preferences', async (req, res) => {
+  try {
+    const { tenantId, userId, alertType, channel, isEnabled, digestFrequency } = req.body
+    const result = await pool.query(
+      `INSERT INTO ${SCHEMA}notification_preferences (tenant_id, user_id, alert_type, channel, is_enabled, digest_frequency)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (tenant_id, user_id, alert_type, channel) DO UPDATE SET is_enabled = $5, digest_frequency = $6, updated_at = NOW()
+       RETURNING *`,
+      [tenantId || null, userId || null, alertType, channel || 'in_app', isEnabled !== false, digestFrequency || 'immediate']
+    )
+    res.json({ success: true, data: toCamelCase(result.rows[0]) })
+  } catch (error) {
+    console.error('Error upserting preference:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`API server running at http://0.0.0.0:${PORT}`)
 })

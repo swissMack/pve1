@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import Navigation from './Navigation.vue'
 import WelcomePage from './WelcomePage.vue'
 import DeviceList from './DeviceList.vue'
@@ -8,6 +8,18 @@ import ConsumptionPage from './consumption/ConsumptionPage.vue'
 import UserSettings from './UserSettings.vue'
 import AboutPage from './AboutPage.vue'
 import AskBobPane from './consumption/AskBobPane.vue'
+import AssetsPage from './AssetsPage.vue'
+import AssetDetailPage from './AssetDetailPage.vue'
+import GeozonesPage from './GeozonesPage.vue'
+import GeozoneDetailPage from './GeozoneDetailPage.vue'
+import GeozoneEditorPage from './GeozoneEditorPage.vue'
+import CustomerDashboardPage from './CustomerDashboardPage.vue'
+// Sprint 4: Alerts & Geofencing
+import AlertDashboardPage from './AlertDashboardPage.vue'
+import AlertDetailPage from './AlertDetailPage.vue'
+import AlertRulesPage from './AlertRulesPage.vue'
+import AlertRuleEditorPage from './AlertRuleEditorPage.vue'
+import NotificationsPage from './NotificationsPage.vue'
 
 // API Base URL
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
@@ -28,7 +40,92 @@ interface DashboardProps {
 const props = defineProps<DashboardProps>()
 
 // Valid pages list
-const validPages = ['dashboard', 'devices', 'sim-cards', 'consumption', 'settings', 'about', 'support']
+const validPages = ['dashboard', 'devices', 'sim-cards', 'assets', 'geozones', 'consumption', 'customer-dashboard', 'alerts', 'alert-rules', 'alert-rule-editor', 'notifications', 'settings', 'about', 'support']
+
+// Sprint 3: Asset & Geozone detail/editor state
+const selectedAssetId = ref<string | null>(null)
+const selectedGeozoneId = ref<string | null>(null)
+const showGeozoneEditor = ref(false)
+const editingGeozoneId = ref<string | null>(null)
+
+const handleSelectAsset = (assetId: string) => {
+  selectedAssetId.value = assetId
+}
+const handleCloseAssetDetail = () => {
+  selectedAssetId.value = null
+}
+const handleSelectGeozone = (geozoneId: string) => {
+  selectedGeozoneId.value = geozoneId
+}
+const handleCloseGeozoneDetail = () => {
+  selectedGeozoneId.value = null
+}
+const handleCreateGeozone = () => {
+  editingGeozoneId.value = null
+  showGeozoneEditor.value = true
+}
+const handleEditGeozone = () => {
+  editingGeozoneId.value = selectedGeozoneId.value
+  selectedGeozoneId.value = null
+  showGeozoneEditor.value = true
+}
+const handleCloseGeozoneEditor = () => {
+  showGeozoneEditor.value = false
+  editingGeozoneId.value = null
+}
+const handleGeozoneSaved = () => {
+  showGeozoneEditor.value = false
+  editingGeozoneId.value = null
+  refreshKey.value++
+}
+
+// Sprint 4: Alert & Notification state
+const selectedAlertId = ref<string | null>(null)
+const editingAlertRuleId = ref<string | null>(null)
+const unreadNotificationCount = ref(0)
+let notificationPollInterval: ReturnType<typeof setInterval> | null = null
+
+const handleSelectAlert = (alertId: string) => {
+  selectedAlertId.value = alertId
+}
+const handleCloseAlertDetail = () => {
+  selectedAlertId.value = null
+}
+const handleNavigateToRules = () => {
+  currentPage.value = 'alert-rules'
+}
+const handleCreateAlertRule = () => {
+  editingAlertRuleId.value = null
+  currentPage.value = 'alert-rule-editor'
+}
+const handleEditAlertRule = (ruleId: string) => {
+  editingAlertRuleId.value = ruleId
+  currentPage.value = 'alert-rule-editor'
+}
+const handleAlertRuleEditorClose = () => {
+  currentPage.value = 'alert-rules'
+  editingAlertRuleId.value = null
+}
+const handleAlertRuleSaved = () => {
+  currentPage.value = 'alert-rules'
+  editingAlertRuleId.value = null
+  refreshKey.value++
+}
+const handleNavigateToNotifications = () => {
+  currentPage.value = 'notifications'
+}
+
+const fetchUnreadCount = async () => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/notifications/unread-count`)
+    const result = await response.json()
+    if (result.success) {
+      unreadNotificationCount.value = result.data.count
+    }
+  } catch {
+    // Silently fail for polling
+  }
+}
 
 // Load saved page from localStorage or default to 'dashboard'
 const savedPage = localStorage.getItem('sim-portal-current-page')
@@ -77,6 +174,13 @@ const handleStorageChange = () => {
 onMounted(() => {
   loadLLMEnabled()
   window.addEventListener('storage', handleStorageChange)
+  // Sprint 4: Start notification polling
+  fetchUnreadCount()
+  notificationPollInterval = setInterval(fetchUnreadCount, 30000)
+})
+
+onUnmounted(() => {
+  if (notificationPollInterval) clearInterval(notificationPollInterval)
 })
 
 const handlePageChange = (page: string) => {
@@ -110,7 +214,7 @@ const toggleAskBob = () => {
       <header class="h-16 border-b border-border-dark bg-surface-dark px-4 lg:px-6 flex items-center gap-4 shrink-0 z-[10000]">
         <!-- Page Title (hidden on mobile to save space) -->
         <h2 class="text-lg font-bold text-white hidden lg:block whitespace-nowrap">
-          {{ currentPage === 'dashboard' ? 'System Overview' : currentPage === 'devices' ? 'Device Management' : currentPage === 'sim-cards' ? 'SIM Management' : currentPage === 'consumption' ? 'Consumption Analytics' : currentPage === 'settings' ? 'User Settings' : currentPage === 'about' ? 'About IoTo' : 'Support' }}
+          {{ currentPage === 'dashboard' ? 'System Overview' : currentPage === 'devices' ? 'Device Management' : currentPage === 'sim-cards' ? 'SIM Management' : currentPage === 'assets' ? 'Asset Management' : currentPage === 'geozones' ? 'Geozone Management' : currentPage === 'consumption' ? 'Consumption Analytics' : currentPage === 'customer-dashboard' ? 'Customer Dashboard' : currentPage === 'alerts' ? 'Alert Dashboard' : currentPage === 'alert-rules' ? 'Alert Rules' : currentPage === 'alert-rule-editor' ? (editingAlertRuleId ? 'Edit Alert Rule' : 'New Alert Rule') : currentPage === 'notifications' ? 'Notifications' : currentPage === 'settings' ? 'User Settings' : currentPage === 'about' ? 'About IoTo' : 'Support' }}
         </h2>
 
         <!-- Spacer to push actions to the right -->
@@ -134,9 +238,11 @@ const toggleAskBob = () => {
             <span class="material-symbols-outlined text-[18px]">refresh</span>
             <span class="hidden sm:inline">Refresh</span>
           </button>
-          <button class="p-2 text-text-secondary hover:text-primary transition-colors relative">
+          <button @click="handleNavigateToNotifications" class="p-2 text-text-secondary hover:text-primary transition-colors relative">
             <span class="material-symbols-outlined">notifications</span>
-            <span class="absolute top-1.5 right-1.5 size-2 bg-red-500 rounded-full border-2 border-surface-dark"></span>
+            <span v-if="unreadNotificationCount > 0" class="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] flex items-center justify-center bg-red-500 rounded-full border-2 border-surface-dark text-[10px] font-bold text-white px-1">
+              {{ unreadNotificationCount > 99 ? '99+' : unreadNotificationCount }}
+            </span>
           </button>
           <button class="p-2 text-text-secondary hover:text-primary transition-colors">
             <span class="material-symbols-outlined">help</span>
@@ -149,7 +255,14 @@ const toggleAskBob = () => {
         <WelcomePage v-if="currentPage === 'dashboard'" :key="'welcome-' + refreshKey" :onLogout="props.onLogout" :onNavigate="handlePageChange" />
         <DeviceList v-else-if="currentPage === 'devices'" :key="'devices-' + refreshKey" />
         <SIMCardManagement v-else-if="currentPage === 'sim-cards'" :key="'sim-' + refreshKey" />
+        <AssetsPage v-else-if="currentPage === 'assets'" :key="'assets-' + refreshKey" @selectAsset="handleSelectAsset" />
+        <GeozonesPage v-else-if="currentPage === 'geozones'" :key="'geozones-' + refreshKey" @selectGeozone="handleSelectGeozone" @createGeozone="handleCreateGeozone" />
+        <CustomerDashboardPage v-else-if="currentPage === 'customer-dashboard'" :key="'cust-dash-' + refreshKey" @selectAsset="handleSelectAsset" />
         <ConsumptionPage v-else-if="currentPage === 'consumption'" :key="'consumption-' + refreshKey" />
+        <AlertDashboardPage v-else-if="currentPage === 'alerts'" :key="'alerts-' + refreshKey" @selectAlert="handleSelectAlert" @navigateToRules="handleNavigateToRules" @navigateToNotifications="handleNavigateToNotifications" />
+        <AlertRulesPage v-else-if="currentPage === 'alert-rules'" :key="'alert-rules-' + refreshKey" @editRule="handleEditAlertRule" @createRule="handleCreateAlertRule" />
+        <AlertRuleEditorPage v-else-if="currentPage === 'alert-rule-editor'" :ruleId="editingAlertRuleId" @close="handleAlertRuleEditorClose" @saved="handleAlertRuleSaved" />
+        <NotificationsPage v-else-if="currentPage === 'notifications'" :key="'notifications-' + refreshKey" @selectAlert="handleSelectAlert" />
         <UserSettings v-else-if="currentPage === 'settings'" :currentUser="props.currentUser" />
         <AboutPage v-else-if="currentPage === 'about'" />
         <div v-else-if="currentPage === 'support'" class="p-6 lg:p-8 overflow-y-auto">
@@ -442,6 +555,38 @@ const toggleAskBob = () => {
         </div>
       </div>
     </main>
+
+    <!-- Sprint 3: Asset Detail Dialog -->
+    <AssetDetailPage
+      v-if="selectedAssetId"
+      :assetId="selectedAssetId"
+      :onClose="handleCloseAssetDetail"
+    />
+
+    <!-- Sprint 4: Alert Detail Dialog -->
+    <AlertDetailPage
+      v-if="selectedAlertId"
+      :alertId="selectedAlertId"
+      @close="handleCloseAlertDetail"
+      @selectAsset="handleSelectAsset"
+      @selectGeozone="handleSelectGeozone"
+    />
+
+    <!-- Sprint 3: Geozone Detail Dialog -->
+    <GeozoneDetailPage
+      v-if="selectedGeozoneId"
+      :geozoneId="selectedGeozoneId"
+      :onClose="handleCloseGeozoneDetail"
+      @editGeozone="handleEditGeozone"
+    />
+
+    <!-- Sprint 3: Geozone Editor Dialog -->
+    <GeozoneEditorPage
+      v-if="showGeozoneEditor"
+      :geozoneId="editingGeozoneId"
+      :onClose="handleCloseGeozoneEditor"
+      :onSaved="handleGeozoneSaved"
+    />
 
     <!-- Global Ask Bob Side Panel -->
     <Transition name="slide">

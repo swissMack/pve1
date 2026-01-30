@@ -36,7 +36,13 @@ const menuItems = [
   { id: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
   { id: 'devices', label: 'Devices', icon: 'router' },
   { id: 'sim-cards', label: 'SIM Cards', icon: 'sim_card' },
+  { id: 'assets', label: 'Assets', icon: 'inventory_2' },
+  { id: 'geozones', label: 'Geozones', icon: 'map' },
+  { id: 'alerts', label: 'Alerts', icon: 'warning' },
+  { id: 'alert-rules', label: 'Alert Rules', icon: 'rule' },
+  { id: 'notifications', label: 'Notifications', icon: 'notifications' },
   { id: 'consumption', label: 'Consumption', icon: 'analytics' },
+  { id: 'customer-dashboard', label: 'Customer View', icon: 'dashboard_customize' },
   { id: 'support', label: 'Support', icon: 'help' },
   { id: 'about', label: 'About', icon: 'info' }
 ]

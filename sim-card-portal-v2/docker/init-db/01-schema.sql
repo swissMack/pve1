@@ -6,6 +6,7 @@
 -- Enable extensions
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "postgis";
 
 -- ============================================================================
 -- CORE TABLES
@@ -300,3 +301,133 @@ $$ LANGUAGE plpgsql;
 ALTER TABLE sim_cards ADD COLUMN IF NOT EXISTS data_used VARCHAR(50);
 ALTER TABLE devices ADD COLUMN IF NOT EXISTS latitude NUMERIC(10,7);
 ALTER TABLE devices ADD COLUMN IF NOT EXISTS longitude NUMERIC(10,7);
+
+-- ============================================================================
+-- SPRINT 3: ASSET MANAGEMENT & GEOZONES
+-- ============================================================================
+
+-- Asset status enum
+DO $$ BEGIN
+  CREATE TYPE asset_status AS ENUM ('at_facility', 'in_transit', 'at_supplier', 'at_customer', 'unknown', 'stored');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- Assets table
+CREATE TABLE IF NOT EXISTS assets (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id UUID,
+  customer_id UUID,
+  project_id UUID,
+  device_id VARCHAR(50) REFERENCES devices(id) UNIQUE,
+  name VARCHAR(255) NOT NULL,
+  asset_type VARCHAR(100),
+  barcode VARCHAR(100) UNIQUE,
+  birth_date DATE,
+  composition JSONB,
+  recycled_content NUMERIC(5,4) DEFAULT 0,
+  trip_count INTEGER DEFAULT 0,
+  last_trip_date TIMESTAMPTZ,
+  current_status asset_status DEFAULT 'unknown',
+  certification_status VARCHAR(100),
+  compliance_expiry DATE,
+  labels JSONB DEFAULT '[]'::jsonb,
+  metadata JSONB DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  deleted_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_assets_tenant ON assets(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_assets_customer ON assets(customer_id);
+CREATE INDEX IF NOT EXISTS idx_assets_project ON assets(project_id);
+CREATE INDEX IF NOT EXISTS idx_assets_device ON assets(device_id);
+CREATE INDEX IF NOT EXISTS idx_assets_status ON assets(current_status);
+CREATE INDEX IF NOT EXISTS idx_assets_barcode ON assets(barcode);
+CREATE INDEX IF NOT EXISTS idx_assets_type ON assets(asset_type);
+
+-- Zone type enum
+DO $$ BEGIN
+  CREATE TYPE zone_type AS ENUM ('warehouse', 'supplier', 'customer', 'transit_hub', 'restricted');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- Geozones table
+CREATE TABLE IF NOT EXISTS geozones (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id UUID,
+  customer_id UUID,
+  name VARCHAR(255) NOT NULL,
+  zone_type zone_type DEFAULT 'warehouse',
+  geometry GEOMETRY(POLYGON, 4326),
+  center_lat NUMERIC(10,7),
+  center_lng NUMERIC(10,7),
+  radius_meters INTEGER,
+  address VARCHAR(500),
+  owner_name VARCHAR(255),
+  contact_name VARCHAR(255),
+  contact_email VARCHAR(255),
+  operating_hours JSONB,
+  is_active BOOLEAN DEFAULT true,
+  hysteresis_meters INTEGER DEFAULT 50,
+  color VARCHAR(7) DEFAULT '#137fec',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  deleted_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_geozones_tenant ON geozones(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_geozones_customer ON geozones(customer_id);
+CREATE INDEX IF NOT EXISTS idx_geozones_geometry ON geozones USING GIST(geometry);
+CREATE INDEX IF NOT EXISTS idx_geozones_active ON geozones(is_active);
+
+-- Geozone event type enum
+DO $$ BEGIN
+  CREATE TYPE geozone_event_type AS ENUM ('zone_enter', 'zone_exit', 'zone_dwell');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- Trip status enum
+DO $$ BEGIN
+  CREATE TYPE trip_status AS ENUM ('in_progress', 'completed', 'cancelled');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- Geozone events table
+CREATE TABLE IF NOT EXISTS geozone_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  asset_id UUID NOT NULL REFERENCES assets(id),
+  geozone_id UUID NOT NULL REFERENCES geozones(id),
+  device_id VARCHAR(50) REFERENCES devices(id),
+  event_type geozone_event_type NOT NULL,
+  latitude NUMERIC(10,7),
+  longitude NUMERIC(10,7),
+  occurred_at TIMESTAMPTZ DEFAULT NOW(),
+  processed_at TIMESTAMPTZ DEFAULT NOW(),
+  metadata JSONB DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_geozone_events_asset ON geozone_events(asset_id);
+CREATE INDEX IF NOT EXISTS idx_geozone_events_geozone ON geozone_events(geozone_id);
+CREATE INDEX IF NOT EXISTS idx_geozone_events_device ON geozone_events(device_id);
+CREATE INDEX IF NOT EXISTS idx_geozone_events_type ON geozone_events(event_type);
+CREATE INDEX IF NOT EXISTS idx_geozone_events_occurred ON geozone_events(occurred_at DESC);
+
+-- Asset trips table
+CREATE TABLE IF NOT EXISTS asset_trips (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  asset_id UUID NOT NULL REFERENCES assets(id),
+  origin_geozone_id UUID REFERENCES geozones(id),
+  destination_geozone_id UUID REFERENCES geozones(id),
+  departed_at TIMESTAMPTZ,
+  arrived_at TIMESTAMPTZ,
+  status trip_status DEFAULT 'in_progress',
+  distance_km NUMERIC(10,2),
+  metadata JSONB DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_asset_trips_asset ON asset_trips(asset_id);
+CREATE INDEX IF NOT EXISTS idx_asset_trips_origin ON asset_trips(origin_geozone_id);
+CREATE INDEX IF NOT EXISTS idx_asset_trips_destination ON asset_trips(destination_geozone_id);
+CREATE INDEX IF NOT EXISTS idx_asset_trips_status ON asset_trips(status);

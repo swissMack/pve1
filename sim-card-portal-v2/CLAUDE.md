@@ -151,3 +151,40 @@ docker restart mqtt-control-panel
 - **SIM Card Portal**: http://192.168.1.59:8080
 - **Portal API**: http://192.168.1.59:3001
 - **MQTT Control Panel**: http://192.168.1.59:5174
+
+## Sprint Progress
+
+### Sprint 5 — Bulk Operations (FR-802 to FR-805)
+
+**Status:** Implemented
+
+| FR | Feature | Status |
+|----|---------|--------|
+| FR-802 | Bulk device-asset association (CSV upload, validate, confirm, progress, undo) | Done |
+| FR-803 | Device vs. asset rules engine (scope labeling on alert rules) | Done |
+| FR-804 | One-to-one attribution enforcement (swap support, audit log) | Done |
+| FR-805 | Asset location inheritance (device position to asset metadata) | Done |
+
+**New Files:**
+- `docker/init-db/07-sprint5-bulk-operations.sql` — Schema: 3 new tables, enum extensions, rule_scope columns
+- `docker/init-db/08-sprint5-seed-data.sql` — Sample bulk ops + scoped alert rules
+- `src/components/BulkOperationsPage.vue` — Bulk operations UI (CSV upload, validation, progress, history)
+
+**Modified Files:**
+- `scripts/api-server-docker.js` — Bulk ops API (7 endpoints), swap logic on associate, audit logging, device location endpoint, rule_scope on alert rules
+- `src/components/Navigation.vue` — "Bulk Operations" nav item
+- `src/components/Dashboard.vue` — BulkOperationsPage routing
+- `src/components/AlertRulesPage.vue` — Scope filter + scope badge column
+- `src/components/AlertRuleEditorPage.vue` — Grouped trigger types (Device/Asset), scope badge
+- `src/components/AlertDetailPage.vue` — Scope badge in header
+
+**API Endpoints Added:**
+- `POST /api/bulk/device-asset-association` — Validate CSV rows
+- `POST /api/bulk/:batchId/confirm` — Process batch
+- `POST /api/bulk/:batchId/cancel` — Cancel validated batch
+- `GET /api/bulk/:batchId/status` — Get progress
+- `GET /api/bulk/:batchId/items` — Row-level results
+- `GET /api/bulk` — List all batches
+- `POST /api/bulk/:batchId/undo` — Rollback within 24h
+- `GET /api/association-log` — Audit trail
+- `PUT /api/devices/:id/location` — Update device position + propagate to asset

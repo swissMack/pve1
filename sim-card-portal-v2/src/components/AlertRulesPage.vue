@@ -9,8 +9,9 @@ interface AlertRule {
   id: string
   name: string
   description: string | null
-  triggerType: 'zone_enter' | 'zone_exit' | 'arrival_overdue' | 'low_battery' | 'no_report'
+  triggerType: 'zone_enter' | 'zone_exit' | 'arrival_overdue' | 'low_battery' | 'no_report' | 'signal_strength' | 'firmware_update' | 'trip_complete' | 'idle_too_long' | 'geozone_breach'
   severity: 'critical' | 'high' | 'medium' | 'low' | 'info'
+  ruleScope: 'device' | 'asset' | null
   conditions: Record<string, unknown>
   actions: Record<string, unknown>
   recipients: { type: string; value: string }[]
@@ -44,7 +45,12 @@ const TRIGGER_TYPE_OPTIONS = [
   { label: 'Zone Exit', value: 'zone_exit' },
   { label: 'Arrival Overdue', value: 'arrival_overdue' },
   { label: 'Low Battery', value: 'low_battery' },
-  { label: 'No Report', value: 'no_report' }
+  { label: 'No Report', value: 'no_report' },
+  { label: 'Signal Strength', value: 'signal_strength' },
+  { label: 'Firmware Update', value: 'firmware_update' },
+  { label: 'Trip Complete', value: 'trip_complete' },
+  { label: 'Idle Too Long', value: 'idle_too_long' },
+  { label: 'Geozone Breach', value: 'geozone_breach' }
 ]
 
 // ============================================================================
@@ -57,6 +63,7 @@ const error = ref('')
 const searchTerm = ref('')
 const selectedTriggerType = ref('')
 const enabledFilter = ref<'' | 'true' | 'false'>('')
+const selectedScope = ref<'' | 'device' | 'asset'>('')
 
 // File input for import
 const importFileInput = ref<HTMLInputElement | null>(null)
@@ -74,6 +81,7 @@ const loadRules = async () => {
     if (selectedTriggerType.value) url.searchParams.set('trigger_type', selectedTriggerType.value)
     if (enabledFilter.value) url.searchParams.set('is_enabled', enabledFilter.value)
     if (searchTerm.value) url.searchParams.set('search', searchTerm.value)
+    if (selectedScope.value) url.searchParams.set('rule_scope', selectedScope.value)
 
     const response = await fetch(url.toString())
     const result = await response.json()
@@ -116,6 +124,10 @@ watch(enabledFilter, () => {
   loadRules()
 })
 
+watch(selectedScope, () => {
+  loadRules()
+})
+
 // ============================================================================
 // Stats
 // ============================================================================
@@ -136,6 +148,11 @@ const getTriggerTypeLabel = (type: string): string => {
     case 'arrival_overdue': return 'Arrival Overdue'
     case 'low_battery': return 'Low Battery'
     case 'no_report': return 'No Report'
+    case 'signal_strength': return 'Signal Strength'
+    case 'firmware_update': return 'Firmware Update'
+    case 'trip_complete': return 'Trip Complete'
+    case 'idle_too_long': return 'Idle Too Long'
+    case 'geozone_breach': return 'Geozone Breach'
     default: return type
   }
 }
@@ -147,6 +164,11 @@ const getTriggerTypeBadgeClass = (type: string): string => {
     case 'arrival_overdue': return 'bg-purple-500/10 text-purple-400'
     case 'low_battery': return 'bg-red-500/10 text-red-400'
     case 'no_report': return 'bg-gray-500/10 text-gray-400'
+    case 'signal_strength': return 'bg-cyan-500/10 text-cyan-400'
+    case 'firmware_update': return 'bg-indigo-500/10 text-indigo-400'
+    case 'trip_complete': return 'bg-teal-500/10 text-teal-400'
+    case 'idle_too_long': return 'bg-orange-500/10 text-orange-400'
+    case 'geozone_breach': return 'bg-rose-500/10 text-rose-400'
     default: return 'bg-gray-500/10 text-gray-400'
   }
 }
@@ -158,8 +180,25 @@ const getTriggerTypeIcon = (type: string): string => {
     case 'arrival_overdue': return 'schedule'
     case 'low_battery': return 'battery_alert'
     case 'no_report': return 'signal_wifi_off'
+    case 'signal_strength': return 'signal_cellular_alt'
+    case 'firmware_update': return 'system_update'
+    case 'trip_complete': return 'flag'
+    case 'idle_too_long': return 'hourglass_empty'
+    case 'geozone_breach': return 'shield'
     default: return 'notifications'
   }
+}
+
+const getScopeBadgeClass = (scope: string | null): string => {
+  return scope === 'device' ? 'bg-cyan-500/10 text-cyan-400' : 'bg-teal-500/10 text-teal-400'
+}
+
+const getScopeIcon = (scope: string | null): string => {
+  return scope === 'device' ? 'router' : 'inventory_2'
+}
+
+const getScopeLabel = (scope: string | null): string => {
+  return scope === 'device' ? 'Device' : 'Asset'
 }
 
 const getSeverityLabel = (severity: string): string => {
@@ -451,6 +490,33 @@ const handleImportFile = async (event: Event) => {
             </option>
           </select>
 
+          <!-- Scope Filter -->
+          <div class="flex bg-background-dark p-1 rounded-lg border border-border-dark">
+            <button
+              @click="selectedScope = ''"
+              class="px-3 py-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap"
+              :class="selectedScope === '' ? 'bg-surface-dark text-white shadow-sm' : 'text-text-secondary hover:text-white'"
+            >
+              All
+            </button>
+            <button
+              @click="selectedScope = 'device'"
+              class="flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap"
+              :class="selectedScope === 'device' ? 'bg-surface-dark text-cyan-400 shadow-sm' : 'text-text-secondary hover:text-white'"
+            >
+              <span class="material-symbols-outlined text-[14px]">router</span>
+              Device
+            </button>
+            <button
+              @click="selectedScope = 'asset'"
+              class="flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap"
+              :class="selectedScope === 'asset' ? 'bg-surface-dark text-teal-400 shadow-sm' : 'text-text-secondary hover:text-white'"
+            >
+              <span class="material-symbols-outlined text-[14px]">inventory_2</span>
+              Asset
+            </button>
+          </div>
+
           <!-- Enabled Toggle Filter -->
           <div class="flex bg-background-dark p-1 rounded-lg border border-border-dark">
             <button
@@ -506,6 +572,7 @@ const handleImportFile = async (event: Event) => {
             <thead>
               <tr class="bg-background-dark border-b border-border-dark">
                 <th class="py-3 px-4 text-xs font-semibold uppercase text-text-secondary tracking-wider">Name</th>
+                <th class="py-3 px-4 text-xs font-semibold uppercase text-text-secondary tracking-wider">Scope</th>
                 <th class="py-3 px-4 text-xs font-semibold uppercase text-text-secondary tracking-wider">Trigger Type</th>
                 <th class="py-3 px-4 text-xs font-semibold uppercase text-text-secondary tracking-wider">Severity</th>
                 <th class="py-3 px-4 text-xs font-semibold uppercase text-text-secondary tracking-wider">Conditions</th>
@@ -534,6 +601,17 @@ const handleImportFile = async (event: Event) => {
                       <p class="text-text-secondary text-xs truncate max-w-[200px]">{{ rule.description || 'No description' }}</p>
                     </div>
                   </div>
+                </td>
+
+                <!-- Scope Badge -->
+                <td class="py-3 px-4">
+                  <span
+                    class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium"
+                    :class="getScopeBadgeClass(rule.ruleScope)"
+                  >
+                    <span class="material-symbols-outlined text-[14px]">{{ getScopeIcon(rule.ruleScope) }}</span>
+                    {{ getScopeLabel(rule.ruleScope) }}
+                  </span>
                 </td>
 
                 <!-- Trigger Type Badge -->
@@ -621,7 +699,7 @@ const handleImportFile = async (event: Event) => {
 
               <!-- Empty State -->
               <tr v-if="rules.length === 0">
-                <td colspan="7" class="py-12 text-center">
+                <td colspan="8" class="py-12 text-center">
                   <div class="flex flex-col items-center gap-2 text-text-secondary">
                     <span class="material-symbols-outlined text-4xl">notifications_off</span>
                     <p class="text-sm">No alert rules found</p>

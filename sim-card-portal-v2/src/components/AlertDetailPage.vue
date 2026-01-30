@@ -32,6 +32,8 @@ interface AlertDetail {
   alertType: string
   severity: string
   status: string
+  ruleScope: 'device' | 'asset' | null
+  deviceId: string | null
   title: string
   description: string | null
   assetId: string | null
@@ -568,6 +570,15 @@ watch(
                 :style="{ backgroundColor: getStatusColor(alert.status) }"
               ></span>
               {{ formatStatus(alert.status) }}
+            </span>
+            <!-- Scope badge -->
+            <span
+              v-if="alert.ruleScope"
+              class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wider"
+              :class="alert.ruleScope === 'device' ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/30' : 'bg-teal-500/10 text-teal-400 border border-teal-500/30'"
+            >
+              <span class="material-symbols-outlined text-[12px]">{{ alert.ruleScope === 'device' ? 'router' : 'inventory_2' }}</span>
+              {{ alert.ruleScope }}
             </span>
             <!-- Snoozed until indicator -->
             <span

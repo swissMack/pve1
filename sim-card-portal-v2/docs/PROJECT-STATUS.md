@@ -1,6 +1,6 @@
 # Ioto FMP — Project Status & Context Summary
 
-**Last Updated**: 29 January 2026
+**Last Updated**: 30 January 2026
 **Purpose**: Single source of truth for project state. Read this first in any new session.
 
 ---
@@ -55,24 +55,60 @@ Ioto Communications is building the **Fleet Management Platform (FMP)** — a mu
 
 ---
 
-## What Has NOT Been Started
+## What Has Been Built
 
-### Code — Nothing Built Yet for `ioto-fmp`
+### Repository: `ioto-fmp` ✅
 
-The `ioto-fmp` GitHub repo does not exist yet. No code has been written for the new platform. Everything below is pending.
+Local git repo at `~/ioto-fmp`, remote at `https://github.com/swissMack/ioto-fmp.git` (11 commits). Monorepo layout: `frontend/`, `api/`, `shared/`, `db/`, `docker/`.
 
-### Existing Code (in `pve1/sim-card-portal-v2`)
+### Docker Compose Stack ✅
 
-There is a working prototype with 28 Vue components, Express 5 API, PostgreSQL (Supabase), EMQX MQTT, Docker Compose, and UpCloud deployment. This code has **10 critical security issues** (documented in unified-requirements.md §3.2) and will be selectively migrated — not forked.
+7 services: frontend (Vue 3 dev), api (Express 5), postgres (PostGIS 15), kafka (KRaft), clickhouse (24.3), emqx (5.8), keycloak (26). All with health checks on `fmp-network` bridge.
+
+### Sprint 1 — Foundation ✅
+
+- Multi-tenant schema (tenants, customers, projects)
+- Keycloak 26 with realm config, OIDC auth middleware (jose JWT verification)
+- RBAC middleware (platform_admin role filtering)
+- PrimeVue app shell with sidebar navigation, dark/light mode toggle
+- IoTo brand color system (sage green primary, warm beige/navy dual-mode)
+
+### Sprint 2 — Device & SIM Management ✅
+
+- Devices table + SIM cards table (PostgreSQL migrations 003)
+- CRUD API routes + services for both entities
+- DevicesPage, DeviceDetailPage, DeviceMapPage (Leaflet)
+- SimCardsPage, SimDetailPage
+- Tenant-aware data filtering on all routes
+
+### Sprint 3 — Customer Dashboard & Maps ✅
+
+- PostGIS spatial queries for geozones
+- Assets, Geozones, GeozoneEvents, AssetTrips tables (migrations 004-006)
+- Assets CRUD + Geozones CRUD + spatial queries
+- Customer Dashboard (zero device data)
+- Geozone editor with leaflet-draw
+- Kafka integration (kafkajs)
+
+### Sprint 4 — Alerts & Geofencing ✅
+
+- Alerts + Alert Rules + Notifications tables (migration 007)
+- Alert rules engine (CRUD, clone, export/import, toggle)
+- Alert lifecycle (transitions, bulk transitions, history, stats)
+- Status inference service (geozone-based status, manual override, history)
+- Responsibility transfer tracking
+- Notification preferences per user
 
 ### IoTo Brand Color System ✅ (29 Jan 2026)
 
-The prototype has been updated from the old cool gray/blue palette to the official IoTo brand color system:
-- **Light mode**: Warm beige backgrounds, white surfaces, navy text, sage green primary
-- **Dark mode**: Navy backgrounds, dark navy surfaces, light text, lighter sage green primary
-- **Implementation**: PrimeVue `definePreset` + CSS custom properties + Tailwind `@theme`
-- **Design reference**: `docs/ioto-color-concept.md` (v1.1 — includes implementation mapping)
-- **Files changed**: `main.ts`, `style.css`, `DeviceMap.vue`, `Dashboard.vue`, `Navigation.vue`
+- **Light mode**: Warm beige backgrounds (`#eeece7`), white surfaces, navy text, sage green primary
+- **Dark mode**: Navy backgrounds (`#162237`), dark navy surfaces, lighter sage green primary
+- **Implementation**: PrimeVue `definePreset(Aura)` + CSS custom properties
+- **Design reference**: `docs/ioto-color-concept.md`
+
+### Legacy Prototype (in `pve1/sim-card-portal-v2`)
+
+28 Vue components, Express 5 API, PostgreSQL (Supabase), EMQX MQTT. Has **10 critical security issues** (documented in unified-requirements.md §3.2). Superseded by `ioto-fmp`.
 
 ---
 
@@ -85,7 +121,7 @@ The prototype has been updated from the old cool gray/blue palette to the offici
 4. Write `docs/DEVELOPMENT.md` (local dev guide)
 5. Verify `docker-compose up` works end-to-end
 
-### Sprint 1 — Foundation (Weeks 1-3)
+### Sprint 1 — Foundation (Weeks 1-3) ✅ COMPLETE
 - Multi-tenant database schema + migrations infrastructure
 - Keycloak deployment + realm configuration + OIDC integration
 - RBAC middleware (module-based roles)
@@ -94,13 +130,13 @@ The prototype has been updated from the old cool gray/blue palette to the offici
 - Security items SEC-01 through SEC-04, SEC-06, SEC-07, SEC-09, SEC-10
 - **FR Coverage**: FR-101 to FR-106
 
-### Sprint 2 — Device & SIM Management (Weeks 4-6)
+### Sprint 2 — Device & SIM Management (Weeks 4-6) ✅ COMPLETE
 - Device list, detail, map, filters, signal/battery monitoring
 - SIM list, detail, identifiers, session history, consumption, roaming
 - JT/Onomondo connectivity integration
 - **FR Coverage**: FR-201 to FR-208, FR-301 to FR-307, FR-901, FR-904, FR-905
 
-### Sprint 3 — Customer Dashboard & Maps (Weeks 7-9)
+### Sprint 3 — Customer Dashboard & Maps (Weeks 7-9) ✅ COMPLETE
 - Customer-facing dashboard (zero device data)
 - Asset location map with Leaflet
 - Asset metadata, status, geozone summaries
@@ -108,7 +144,7 @@ The prototype has been updated from the old cool gray/blue palette to the offici
 - Device-asset mapping model
 - **FR Coverage**: FR-401 to FR-408, FR-501 to FR-503, FR-801
 
-### Sprint 4 — Alerts & Geofencing (Weeks 10-12)
+### Sprint 4 — Alerts & Geofencing (Weeks 10-12) ✅ COMPLETE
 - Status inference from geozones
 - Responsibility transfer logic
 - Alert rules engine, dashboard, workflow, notifications
@@ -170,7 +206,7 @@ NLQ-003 (dashboard filter mode) → key differentiator, Sprint 6
 | upcloud | 5.22.211.72 | Legacy hosting | Existing |
 | upcloudBSS | 94.237.6.75 | FMP production target (Phase 2 deploy) | Existing |
 | pve | 192.168.1.59 | Proxmox — existing prototypes | Existing |
-| Local Docker | localhost | FMP development (Phase 1) | Not started |
+| Local Docker | localhost | FMP development (Phase 1) | Active (Sprint 1-4 complete) |
 
 ---
 

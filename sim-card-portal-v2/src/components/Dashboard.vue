@@ -20,6 +20,8 @@ import AlertDetailPage from './AlertDetailPage.vue'
 import AlertRulesPage from './AlertRulesPage.vue'
 import AlertRuleEditorPage from './AlertRuleEditorPage.vue'
 import NotificationsPage from './NotificationsPage.vue'
+// Sprint 5: Bulk Operations
+import BulkOperationsPage from './BulkOperationsPage.vue'
 
 // API Base URL
 const API_BASE_URL = window.location.origin
@@ -40,7 +42,7 @@ interface DashboardProps {
 const props = defineProps<DashboardProps>()
 
 // Valid pages list
-const validPages = ['dashboard', 'devices', 'sim-cards', 'assets', 'geozones', 'consumption', 'customer-dashboard', 'alerts', 'alert-rules', 'alert-rule-editor', 'notifications', 'settings', 'about', 'support']
+const validPages = ['dashboard', 'devices', 'sim-cards', 'assets', 'geozones', 'consumption', 'customer-dashboard', 'alerts', 'alert-rules', 'alert-rule-editor', 'bulk-operations', 'notifications', 'settings', 'about', 'support']
 
 // Sprint 3: Asset & Geozone detail/editor state
 const selectedAssetId = ref<string | null>(null)
@@ -214,7 +216,7 @@ const toggleAskBob = () => {
       <header class="h-16 border-b border-border-dark bg-surface-dark px-4 lg:px-6 flex items-center gap-4 shrink-0 z-[10000]">
         <!-- Page Title (hidden on mobile to save space) -->
         <h2 class="text-lg font-bold text-white hidden lg:block whitespace-nowrap">
-          {{ currentPage === 'dashboard' ? 'System Overview' : currentPage === 'devices' ? 'Device Management' : currentPage === 'sim-cards' ? 'SIM Management' : currentPage === 'assets' ? 'Asset Management' : currentPage === 'geozones' ? 'Geozone Management' : currentPage === 'consumption' ? 'Consumption Analytics' : currentPage === 'customer-dashboard' ? 'Customer Dashboard' : currentPage === 'alerts' ? 'Alert Dashboard' : currentPage === 'alert-rules' ? 'Alert Rules' : currentPage === 'alert-rule-editor' ? (editingAlertRuleId ? 'Edit Alert Rule' : 'New Alert Rule') : currentPage === 'notifications' ? 'Notifications' : currentPage === 'settings' ? 'User Settings' : currentPage === 'about' ? 'About IoTo' : 'Support' }}
+          {{ currentPage === 'dashboard' ? 'System Overview' : currentPage === 'devices' ? 'Device Management' : currentPage === 'sim-cards' ? 'SIM Management' : currentPage === 'assets' ? 'Asset Management' : currentPage === 'geozones' ? 'Geozone Management' : currentPage === 'consumption' ? 'Consumption Analytics' : currentPage === 'customer-dashboard' ? 'Customer Dashboard' : currentPage === 'alerts' ? 'Alert Dashboard' : currentPage === 'alert-rules' ? 'Alert Rules' : currentPage === 'alert-rule-editor' ? (editingAlertRuleId ? 'Edit Alert Rule' : 'New Alert Rule') : currentPage === 'bulk-operations' ? 'Bulk Operations' : currentPage === 'notifications' ? 'Notifications' : currentPage === 'settings' ? 'User Settings' : currentPage === 'about' ? 'About IoTo' : 'Support' }}
         </h2>
 
         <!-- Spacer to push actions to the right -->
@@ -262,6 +264,7 @@ const toggleAskBob = () => {
         <AlertDashboardPage v-else-if="currentPage === 'alerts'" :key="'alerts-' + refreshKey" @selectAlert="handleSelectAlert" @navigateToRules="handleNavigateToRules" @navigateToNotifications="handleNavigateToNotifications" />
         <AlertRulesPage v-else-if="currentPage === 'alert-rules'" :key="'alert-rules-' + refreshKey" @editRule="handleEditAlertRule" @createRule="handleCreateAlertRule" />
         <AlertRuleEditorPage v-else-if="currentPage === 'alert-rule-editor'" :ruleId="editingAlertRuleId" @close="handleAlertRuleEditorClose" @saved="handleAlertRuleSaved" />
+        <BulkOperationsPage v-else-if="currentPage === 'bulk-operations'" :key="'bulk-ops-' + refreshKey" />
         <NotificationsPage v-else-if="currentPage === 'notifications'" :key="'notifications-' + refreshKey" @selectAlert="handleSelectAlert" />
         <UserSettings v-else-if="currentPage === 'settings'" :currentUser="props.currentUser" />
         <AboutPage v-else-if="currentPage === 'about'" />

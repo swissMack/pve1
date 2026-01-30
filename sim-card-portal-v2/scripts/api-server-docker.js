@@ -2051,32 +2051,89 @@ app.delete('/api/assets/:id', async (req, res) => {
   }
 })
 
-// POST /api/assets/:id/device - Associate device
+// POST /api/assets/:id/device - Associate device (FR-804: swap support + audit log)
 app.post('/api/assets/:id/device', async (req, res) => {
+  const client = await pool.connect()
   try {
     const { id } = req.params
-    const { deviceId } = req.body
+    const { deviceId, performedBy } = req.body
     if (!deviceId) {
       return res.status(400).json({ success: false, error: 'deviceId is required' })
     }
-    const result = await pool.query(
+
+    await client.query('BEGIN')
+
+    // Get current state of target asset
+    const currentAsset = await client.query(
+      `SELECT id, device_id FROM ${SCHEMA}assets WHERE id = $1 AND deleted_at IS NULL`, [id]
+    )
+    if (currentAsset.rows.length === 0) {
+      await client.query('ROLLBACK')
+      return res.status(404).json({ success: false, error: 'Asset not found' })
+    }
+    const previousDeviceId = currentAsset.rows[0].device_id
+
+    // FR-804: One-to-one enforcement — check if device is already associated with another asset
+    const existingAssoc = await client.query(
+      `SELECT id FROM ${SCHEMA}assets WHERE device_id = $1 AND deleted_at IS NULL AND id != $2`,
+      [deviceId, id]
+    )
+    let previousAssetId = null
+    if (existingAssoc.rows.length > 0) {
+      // Swap: dissociate from the other asset first
+      previousAssetId = existingAssoc.rows[0].id
+      await client.query(
+        `UPDATE ${SCHEMA}assets SET device_id = NULL, updated_at = NOW() WHERE id = $1`, [previousAssetId]
+      )
+      // Log the dissociation from swap
+      await client.query(
+        `INSERT INTO ${SCHEMA}device_asset_association_log (device_id, asset_id, action, performed_by)
+         VALUES ($1, $2, 'dissociate', $3)`,
+        [deviceId, previousAssetId, performedBy || 'system']
+      )
+    }
+
+    // Associate device to target asset
+    const result = await client.query(
       `UPDATE ${SCHEMA}assets SET device_id = $1, updated_at = NOW() WHERE id = $2 AND deleted_at IS NULL RETURNING *`,
       [deviceId, id]
     )
-    if (result.rows.length === 0) {
-      return res.status(404).json({ success: false, error: 'Asset not found' })
-    }
-    res.json({ success: true, data: toCamelCase(result.rows[0]) })
+
+    // Audit log
+    await client.query(
+      `INSERT INTO ${SCHEMA}device_asset_association_log (device_id, asset_id, action, previous_device_id, previous_asset_id, performed_by)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [deviceId, id, previousAssetId ? 'swap' : 'associate', previousDeviceId, previousAssetId, performedBy || 'system']
+    )
+
+    await client.query('COMMIT')
+    res.json({
+      success: true,
+      data: toCamelCase(result.rows[0]),
+      swapped: !!previousAssetId,
+      previousAssetId
+    })
   } catch (error) {
+    await client.query('ROLLBACK').catch(() => {})
     console.error('Error associating device:', error)
     res.status(500).json({ success: false, error: 'Database error: ' + error.message })
+  } finally {
+    client.release()
   }
 })
 
-// DELETE /api/assets/:id/device - Dissociate device
+// DELETE /api/assets/:id/device - Dissociate device (with audit log)
 app.delete('/api/assets/:id/device', async (req, res) => {
   try {
     const { id } = req.params
+    const performedBy = req.query.performedBy || 'system'
+
+    // Get current device before dissociating
+    const currentAsset = await pool.query(
+      `SELECT device_id FROM ${SCHEMA}assets WHERE id = $1 AND deleted_at IS NULL`, [id]
+    )
+    const previousDeviceId = currentAsset.rows.length > 0 ? currentAsset.rows[0].device_id : null
+
     const result = await pool.query(
       `UPDATE ${SCHEMA}assets SET device_id = NULL, updated_at = NOW() WHERE id = $1 AND deleted_at IS NULL RETURNING *`,
       [id]
@@ -2084,6 +2141,16 @@ app.delete('/api/assets/:id/device', async (req, res) => {
     if (result.rows.length === 0) {
       return res.status(404).json({ success: false, error: 'Asset not found' })
     }
+
+    // Audit log
+    if (previousDeviceId) {
+      await pool.query(
+        `INSERT INTO ${SCHEMA}device_asset_association_log (device_id, asset_id, action, previous_device_id, performed_by)
+         VALUES ($1, $2, 'dissociate', $3, $4)`,
+        [previousDeviceId, id, previousDeviceId, performedBy]
+      )
+    }
+
     res.json({ success: true, data: toCamelCase(result.rows[0]) })
   } catch (error) {
     console.error('Error dissociating device:', error)
@@ -2888,10 +2955,10 @@ app.get('/api/responsibility-transfers/assets/:id', async (req, res) => {
 
 // --- ALERT RULES ENDPOINTS ---
 
-// GET /api/alert-rules - List alert rules
+// GET /api/alert-rules - List alert rules (with rule_scope filter)
 app.get('/api/alert-rules', async (req, res) => {
   try {
-    const { trigger_type, is_enabled, search, tenant_id } = req.query
+    const { trigger_type, is_enabled, search, tenant_id, rule_scope } = req.query
     let query = `SELECT * FROM ${SCHEMA}alert_rules WHERE deleted_at IS NULL`
     const params = []
     let paramCount = 0
@@ -2915,6 +2982,11 @@ app.get('/api/alert-rules', async (req, res) => {
       paramCount++
       query += ` AND (name ILIKE $${paramCount} OR description ILIKE $${paramCount})`
       params.push(`%${search}%`)
+    }
+    if (rule_scope) {
+      paramCount++
+      query += ` AND rule_scope = $${paramCount}`
+      params.push(rule_scope)
     }
 
     query += ' ORDER BY created_at DESC'
@@ -2943,19 +3015,20 @@ app.get('/api/alert-rules/:id', async (req, res) => {
   }
 })
 
-// POST /api/alert-rules - Create alert rule
+// POST /api/alert-rules - Create alert rule (with auto-derived rule_scope)
 app.post('/api/alert-rules', async (req, res) => {
   try {
     const { tenantId, name, description, triggerType, severity, conditions, actions, recipients, isEnabled, cooldownMinutes } = req.body
     if (!name || !triggerType) {
       return res.status(400).json({ success: false, error: 'name and triggerType are required' })
     }
+    const ruleScope = deriveRuleScope(triggerType)
     const result = await pool.query(
-      `INSERT INTO ${SCHEMA}alert_rules (tenant_id, name, description, trigger_type, severity, conditions, actions, recipients, is_enabled, cooldown_minutes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+      `INSERT INTO ${SCHEMA}alert_rules (tenant_id, name, description, trigger_type, severity, conditions, actions, recipients, is_enabled, cooldown_minutes, rule_scope)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
       [tenantId || null, name, description || null, triggerType, severity || 'medium',
        JSON.stringify(conditions || {}), JSON.stringify(actions || { email: true, in_app: true }),
-       JSON.stringify(recipients || []), isEnabled !== false, cooldownMinutes || 60]
+       JSON.stringify(recipients || []), isEnabled !== false, cooldownMinutes || 60, ruleScope]
     )
     res.status(201).json({ success: true, data: toCamelCase(result.rows[0]) })
   } catch (error) {
@@ -2974,7 +3047,13 @@ app.put('/api/alert-rules/:id', async (req, res) => {
 
     const fieldMappings = {
       name: 'name', description: 'description', triggerType: 'trigger_type',
-      severity: 'severity', isEnabled: 'is_enabled', cooldownMinutes: 'cooldown_minutes'
+      severity: 'severity', isEnabled: 'is_enabled', cooldownMinutes: 'cooldown_minutes',
+      ruleScope: 'rule_scope'
+    }
+
+    // Auto-derive rule_scope if triggerType is being updated
+    if (req.body.triggerType && !req.body.ruleScope) {
+      req.body.ruleScope = deriveRuleScope(req.body.triggerType)
     }
 
     for (const [camelKey, snakeKey] of Object.entries(fieldMappings)) {
@@ -3679,6 +3758,491 @@ app.put('/api/notifications/preferences', async (req, res) => {
   } catch (error) {
     console.error('Error upserting preference:', error)
     res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// ============================================================================
+// SPRINT 5: BULK OPERATIONS (FR-802 to FR-805)
+// ============================================================================
+
+// Helper: derive rule_scope from trigger type
+function deriveRuleScope(triggerType) {
+  const deviceTriggers = ['low_battery', 'no_report', 'signal_strength', 'firmware_update']
+  return deviceTriggers.includes(triggerType) ? 'device' : 'asset'
+}
+
+// POST /api/bulk/device-asset-association — validate CSV rows (JSON body)
+app.post('/api/bulk/device-asset-association', async (req, res) => {
+  try {
+    const { rows, createdBy } = req.body
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return res.status(400).json({ success: false, error: 'rows array is required and must not be empty' })
+    }
+
+    const validationResults = []
+    let validCount = 0
+    let invalidCount = 0
+    let skippedCount = 0
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i]
+      const item = { rowNumber: i + 1, deviceId: row.deviceId, assetId: row.assetId, status: 'valid', errors: [] }
+
+      // Validate device exists
+      if (!row.deviceId) {
+        item.errors.push('deviceId is required')
+      } else {
+        const deviceResult = await pool.query(
+          `SELECT id FROM ${SCHEMA}devices WHERE id = $1`, [row.deviceId]
+        )
+        if (deviceResult.rows.length === 0) {
+          item.errors.push(`Device ${row.deviceId} not found`)
+        }
+      }
+
+      // Validate asset exists
+      if (!row.assetId) {
+        item.errors.push('assetId is required')
+      } else {
+        const assetResult = await pool.query(
+          `SELECT id, device_id FROM ${SCHEMA}assets WHERE id = $1 AND deleted_at IS NULL`, [row.assetId]
+        )
+        if (assetResult.rows.length === 0) {
+          item.errors.push(`Asset ${row.assetId} not found`)
+        } else if (assetResult.rows[0].device_id === row.deviceId) {
+          item.status = 'skipped'
+          item.errors.push('Already associated')
+          skippedCount++
+          validationResults.push(item)
+          continue
+        }
+      }
+
+      if (item.errors.length > 0 && item.status !== 'skipped') {
+        item.status = 'invalid'
+        invalidCount++
+      } else if (item.status !== 'skipped') {
+        validCount++
+      }
+
+      validationResults.push(item)
+    }
+
+    // Create the batch in validated state
+    const batchResult = await pool.query(
+      `INSERT INTO ${SCHEMA}bulk_operations (entity_type, status, total_items, created_by, metadata)
+       VALUES ('device_asset_association', 'validated', $1, $2, $3) RETURNING *`,
+      [rows.length, createdBy || 'system', JSON.stringify({ source: 'csv_upload' })]
+    )
+    const batch = batchResult.rows[0]
+
+    // Store validation items
+    for (const item of validationResults) {
+      await pool.query(
+        `INSERT INTO ${SCHEMA}bulk_operation_items (bulk_operation_id, row_number, device_id, asset_id, status, error_message)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [batch.id, item.rowNumber, item.deviceId || null, item.assetId || null,
+         item.status === 'valid' ? 'pending' : item.status === 'skipped' ? 'skipped' : 'error',
+         item.errors.length > 0 ? item.errors.join('; ') : null]
+      )
+    }
+
+    res.json({
+      success: true,
+      data: {
+        batchId: batch.id,
+        totalItems: rows.length,
+        validCount,
+        invalidCount,
+        skippedCount,
+        items: validationResults
+      }
+    })
+  } catch (error) {
+    console.error('Error validating bulk association:', error)
+    res.status(500).json({ success: false, error: 'Validation error: ' + error.message })
+  }
+})
+
+// POST /api/bulk/:batchId/confirm — start processing
+app.post('/api/bulk/:batchId/confirm', async (req, res) => {
+  try {
+    const { batchId } = req.params
+    const { performedBy } = req.body
+
+    // Verify batch exists and is in validated state
+    const batchResult = await pool.query(
+      `SELECT * FROM ${SCHEMA}bulk_operations WHERE id = $1`, [batchId]
+    )
+    if (batchResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Batch not found' })
+    }
+    const batch = batchResult.rows[0]
+    if (batch.status !== 'validated') {
+      return res.status(400).json({ success: false, error: `Batch is in ${batch.status} state, expected validated` })
+    }
+
+    // Set to processing
+    await pool.query(
+      `UPDATE ${SCHEMA}bulk_operations SET status = 'processing', undo_deadline = NOW() + INTERVAL '24 hours', updated_at = NOW() WHERE id = $1`,
+      [batchId]
+    )
+
+    // Get pending items
+    const itemsResult = await pool.query(
+      `SELECT * FROM ${SCHEMA}bulk_operation_items WHERE bulk_operation_id = $1 AND status = 'pending' ORDER BY row_number`,
+      [batchId]
+    )
+
+    let successCount = 0
+    let errorCount = 0
+    let processedCount = 0
+    const skippedResult = await pool.query(
+      `SELECT COUNT(*) as cnt FROM ${SCHEMA}bulk_operation_items WHERE bulk_operation_id = $1 AND status = 'skipped'`, [batchId]
+    )
+    const skippedCount = parseInt(skippedResult.rows[0].cnt)
+
+    for (const item of itemsResult.rows) {
+      processedCount++
+      const client = await pool.connect()
+      try {
+        await client.query('BEGIN')
+
+        // FR-804: One-to-one enforcement with swap support
+        // Check if device is already associated with another asset
+        const existingAssoc = await client.query(
+          `SELECT id, device_id FROM ${SCHEMA}assets WHERE device_id = $1 AND deleted_at IS NULL AND id != $2`,
+          [item.device_id, item.asset_id]
+        )
+
+        let previousAssetId = null
+        if (existingAssoc.rows.length > 0) {
+          // Dissociate from old asset first (swap)
+          previousAssetId = existingAssoc.rows[0].id
+          await client.query(
+            `UPDATE ${SCHEMA}assets SET device_id = NULL, updated_at = NOW() WHERE id = $1`,
+            [previousAssetId]
+          )
+          // Log the dissociation
+          await client.query(
+            `INSERT INTO ${SCHEMA}device_asset_association_log (device_id, asset_id, action, previous_asset_id, performed_by, bulk_operation_id)
+             VALUES ($1, $2, 'dissociate', $3, $4, $5)`,
+            [item.device_id, previousAssetId, null, performedBy || 'system', batchId]
+          )
+        }
+
+        // Check what device the target asset currently has
+        const targetAsset = await client.query(
+          `SELECT device_id FROM ${SCHEMA}assets WHERE id = $1 AND deleted_at IS NULL`, [item.asset_id]
+        )
+        const previousDeviceId = targetAsset.rows.length > 0 ? targetAsset.rows[0].device_id : null
+
+        // Associate device to asset
+        await client.query(
+          `UPDATE ${SCHEMA}assets SET device_id = $1, updated_at = NOW() WHERE id = $2 AND deleted_at IS NULL`,
+          [item.device_id, item.asset_id]
+        )
+
+        // Log the association
+        await client.query(
+          `INSERT INTO ${SCHEMA}device_asset_association_log (device_id, asset_id, action, previous_device_id, performed_by, bulk_operation_id)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [item.device_id, item.asset_id, previousAssetId ? 'swap' : 'associate',
+           previousDeviceId, performedBy || 'system', batchId]
+        )
+
+        // Update item with previous state for undo
+        await client.query(
+          `UPDATE ${SCHEMA}bulk_operation_items SET status = 'success', previous_device_id = $1, previous_asset_id = $2 WHERE id = $3`,
+          [previousDeviceId, previousAssetId, item.id]
+        )
+
+        await client.query('COMMIT')
+        successCount++
+      } catch (itemError) {
+        await client.query('ROLLBACK')
+        errorCount++
+        await pool.query(
+          `UPDATE ${SCHEMA}bulk_operation_items SET status = 'error', error_message = $1 WHERE id = $2`,
+          [itemError.message, item.id]
+        )
+      } finally {
+        client.release()
+      }
+
+      // Update progress
+      await pool.query(
+        `UPDATE ${SCHEMA}bulk_operations SET processed_items = $1, success_count = $2, error_count = $3, skipped_count = $4, updated_at = NOW() WHERE id = $5`,
+        [processedCount, successCount, errorCount, skippedCount, batchId]
+      )
+    }
+
+    // Mark as completed
+    const finalErrorResult = await pool.query(
+      `SELECT COUNT(*) as cnt FROM ${SCHEMA}bulk_operation_items WHERE bulk_operation_id = $1 AND status = 'error'`, [batchId]
+    )
+    const totalErrors = parseInt(finalErrorResult.rows[0].cnt)
+
+    await pool.query(
+      `UPDATE ${SCHEMA}bulk_operations SET status = $1, processed_items = total_items, success_count = $2, error_count = $3, skipped_count = $4, updated_at = NOW() WHERE id = $5`,
+      [totalErrors === itemsResult.rows.length ? 'failed' : 'completed',
+       successCount, totalErrors, skippedCount, batchId]
+    )
+
+    const finalBatch = await pool.query(`SELECT * FROM ${SCHEMA}bulk_operations WHERE id = $1`, [batchId])
+    res.json({ success: true, data: toCamelCase(finalBatch.rows[0]) })
+  } catch (error) {
+    console.error('Error confirming bulk operation:', error)
+    // Mark batch as failed
+    await pool.query(
+      `UPDATE ${SCHEMA}bulk_operations SET status = 'failed', updated_at = NOW() WHERE id = $1`, [req.params.batchId]
+    ).catch(() => {})
+    res.status(500).json({ success: false, error: 'Processing error: ' + error.message })
+  }
+})
+
+// POST /api/bulk/:batchId/cancel — cancel validated batch
+app.post('/api/bulk/:batchId/cancel', async (req, res) => {
+  try {
+    const { batchId } = req.params
+    const result = await pool.query(
+      `UPDATE ${SCHEMA}bulk_operations SET status = 'cancelled', updated_at = NOW() WHERE id = $1 AND status = 'validated' RETURNING *`,
+      [batchId]
+    )
+    if (result.rows.length === 0) {
+      return res.status(400).json({ success: false, error: 'Batch not found or not in validated state' })
+    }
+    res.json({ success: true, data: toCamelCase(result.rows[0]) })
+  } catch (error) {
+    console.error('Error cancelling batch:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// GET /api/bulk/:batchId/status — get progress
+app.get('/api/bulk/:batchId/status', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM ${SCHEMA}bulk_operations WHERE id = $1`, [req.params.batchId]
+    )
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Batch not found' })
+    }
+    res.json({ success: true, data: toCamelCase(result.rows[0]) })
+  } catch (error) {
+    console.error('Error fetching batch status:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// GET /api/bulk/:batchId/items — get row-level results
+app.get('/api/bulk/:batchId/items', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM ${SCHEMA}bulk_operation_items WHERE bulk_operation_id = $1 ORDER BY row_number`,
+      [req.params.batchId]
+    )
+    res.json({ success: true, data: toCamelCase(result.rows) })
+  } catch (error) {
+    console.error('Error fetching batch items:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// GET /api/bulk — list all batches
+app.get('/api/bulk', async (req, res) => {
+  try {
+    const { status, limit } = req.query
+    let query = `SELECT * FROM ${SCHEMA}bulk_operations`
+    const params = []
+    let paramCount = 0
+
+    if (status) {
+      paramCount++
+      query += ` WHERE status = $${paramCount}`
+      params.push(status)
+    }
+
+    query += ' ORDER BY created_at DESC'
+
+    if (limit) {
+      paramCount++
+      query += ` LIMIT $${paramCount}`
+      params.push(parseInt(limit))
+    }
+
+    const result = await pool.query(query, params)
+    res.json({ success: true, data: toCamelCase(result.rows) })
+  } catch (error) {
+    console.error('Error listing batches:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// POST /api/bulk/:batchId/undo — rollback within 24h
+app.post('/api/bulk/:batchId/undo', async (req, res) => {
+  try {
+    const { batchId } = req.params
+    const { performedBy } = req.body
+
+    const batchResult = await pool.query(
+      `SELECT * FROM ${SCHEMA}bulk_operations WHERE id = $1`, [batchId]
+    )
+    if (batchResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Batch not found' })
+    }
+
+    const batch = batchResult.rows[0]
+    if (batch.status !== 'completed') {
+      return res.status(400).json({ success: false, error: 'Only completed batches can be undone' })
+    }
+    if (batch.undo_deadline && new Date(batch.undo_deadline) < new Date()) {
+      return res.status(400).json({ success: false, error: 'Undo window has expired (24h limit)' })
+    }
+
+    // Get successful items to undo
+    const itemsResult = await pool.query(
+      `SELECT * FROM ${SCHEMA}bulk_operation_items WHERE bulk_operation_id = $1 AND status = 'success' ORDER BY row_number DESC`,
+      [batchId]
+    )
+
+    let undoneCount = 0
+    for (const item of itemsResult.rows) {
+      const client = await pool.connect()
+      try {
+        await client.query('BEGIN')
+
+        // Restore asset's previous device (or null)
+        await client.query(
+          `UPDATE ${SCHEMA}assets SET device_id = $1, updated_at = NOW() WHERE id = $2 AND deleted_at IS NULL`,
+          [item.previous_device_id, item.asset_id]
+        )
+
+        // If there was a previous asset that was swapped, restore it
+        if (item.previous_asset_id) {
+          await client.query(
+            `UPDATE ${SCHEMA}assets SET device_id = $1, updated_at = NOW() WHERE id = $2 AND deleted_at IS NULL`,
+            [item.device_id, item.previous_asset_id]
+          )
+        }
+
+        // Log the undo
+        await client.query(
+          `INSERT INTO ${SCHEMA}device_asset_association_log (device_id, asset_id, action, previous_device_id, performed_by, bulk_operation_id, metadata)
+           VALUES ($1, $2, 'dissociate', $3, $4, $5, '{"reason": "bulk_undo"}')`,
+          [item.device_id, item.asset_id, item.previous_device_id, performedBy || 'system', batchId]
+        )
+
+        await client.query(
+          `UPDATE ${SCHEMA}bulk_operation_items SET status = 'undone' WHERE id = $1`, [item.id]
+        )
+
+        await client.query('COMMIT')
+        undoneCount++
+      } catch (undoError) {
+        await client.query('ROLLBACK')
+        console.error(`Error undoing item ${item.id}:`, undoError)
+      } finally {
+        client.release()
+      }
+    }
+
+    await pool.query(
+      `UPDATE ${SCHEMA}bulk_operations SET status = 'undone', updated_at = NOW() WHERE id = $1`, [batchId]
+    )
+
+    res.json({ success: true, data: { batchId, undoneCount, totalItems: itemsResult.rows.length } })
+  } catch (error) {
+    console.error('Error undoing batch:', error)
+    res.status(500).json({ success: false, error: 'Undo error: ' + error.message })
+  }
+})
+
+// GET /api/association-log — list device-asset association audit log
+app.get('/api/association-log', async (req, res) => {
+  try {
+    const { device_id, asset_id, limit } = req.query
+    let query = `SELECT * FROM ${SCHEMA}device_asset_association_log WHERE 1=1`
+    const params = []
+    let paramCount = 0
+
+    if (device_id) {
+      paramCount++
+      query += ` AND device_id = $${paramCount}`
+      params.push(device_id)
+    }
+    if (asset_id) {
+      paramCount++
+      query += ` AND asset_id = $${paramCount}`
+      params.push(asset_id)
+    }
+
+    query += ' ORDER BY created_at DESC'
+
+    if (limit) {
+      paramCount++
+      query += ` LIMIT $${paramCount}`
+      params.push(parseInt(limit))
+    } else {
+      query += ' LIMIT 100'
+    }
+
+    const result = await pool.query(query, params)
+    res.json({ success: true, data: toCamelCase(result.rows) })
+  } catch (error) {
+    console.error('Error fetching association log:', error)
+    res.status(500).json({ success: false, error: 'Database error' })
+  }
+})
+
+// PUT /api/devices/:id/location — update device position + propagate to asset (FR-805)
+app.put('/api/devices/:id/location', async (req, res) => {
+  try {
+    const { id } = req.params
+    const { latitude, longitude } = req.body
+
+    if (latitude == null || longitude == null) {
+      return res.status(400).json({ success: false, error: 'latitude and longitude are required' })
+    }
+
+    // Update device location
+    const deviceResult = await pool.query(
+      `UPDATE ${SCHEMA}devices SET latitude = $1, longitude = $2, last_seen = NOW(), updated_at = NOW() WHERE id = $3 RETURNING *`,
+      [latitude, longitude, id]
+    )
+    if (deviceResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Device not found' })
+    }
+
+    // FR-805: Propagate location to associated asset
+    const assetResult = await pool.query(
+      `SELECT id, metadata FROM ${SCHEMA}assets WHERE device_id = $1 AND deleted_at IS NULL`, [id]
+    )
+
+    let updatedAsset = null
+    if (assetResult.rows.length > 0) {
+      const asset = assetResult.rows[0]
+      const metadata = asset.metadata || {}
+      metadata.location = { latitude, longitude, updatedAt: new Date().toISOString() }
+
+      const updateResult = await pool.query(
+        `UPDATE ${SCHEMA}assets SET metadata = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
+        [JSON.stringify(metadata), asset.id]
+      )
+      updatedAsset = updateResult.rows[0]
+    }
+
+    res.json({
+      success: true,
+      data: {
+        device: toCamelCase(deviceResult.rows[0]),
+        asset: updatedAsset ? toCamelCase(updatedAsset) : null,
+        locationInherited: !!updatedAsset
+      }
+    })
+  } catch (error) {
+    console.error('Error updating device location:', error)
+    res.status(500).json({ success: false, error: 'Database error: ' + error.message })
   }
 })
 

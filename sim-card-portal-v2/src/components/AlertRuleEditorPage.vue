@@ -5,7 +5,7 @@ import { ref, computed, onMounted } from 'vue'
 // Types
 // ============================================================================
 
-type TriggerType = 'zone_enter' | 'zone_exit' | 'arrival_overdue' | 'low_battery' | 'no_report'
+type TriggerType = 'zone_enter' | 'zone_exit' | 'arrival_overdue' | 'low_battery' | 'no_report' | 'signal_strength' | 'firmware_update' | 'trip_complete' | 'idle_too_long' | 'geozone_breach'
 type Severity = 'critical' | 'high' | 'medium' | 'low' | 'info'
 type RecipientType = 'role' | 'email'
 
@@ -68,12 +68,20 @@ const emit = defineEmits<{
 
 const API_BASE_URL = window.location.origin
 
-const TRIGGER_TYPE_OPTIONS: { label: string; value: TriggerType; icon: string }[] = [
+const DEVICE_TRIGGER_OPTIONS: { label: string; value: TriggerType; icon: string }[] = [
+  { label: 'Low Battery', value: 'low_battery', icon: 'battery_alert' },
+  { label: 'No Report', value: 'no_report', icon: 'signal_wifi_off' },
+  { label: 'Signal Strength', value: 'signal_strength', icon: 'signal_cellular_alt' },
+  { label: 'Firmware Update', value: 'firmware_update', icon: 'system_update' }
+]
+
+const ASSET_TRIGGER_OPTIONS: { label: string; value: TriggerType; icon: string }[] = [
   { label: 'Zone Enter', value: 'zone_enter', icon: 'login' },
   { label: 'Zone Exit', value: 'zone_exit', icon: 'logout' },
   { label: 'Arrival Overdue', value: 'arrival_overdue', icon: 'schedule' },
-  { label: 'Low Battery', value: 'low_battery', icon: 'battery_alert' },
-  { label: 'No Report', value: 'no_report', icon: 'signal_wifi_off' }
+  { label: 'Trip Complete', value: 'trip_complete', icon: 'flag' },
+  { label: 'Idle Too Long', value: 'idle_too_long', icon: 'hourglass_empty' },
+  { label: 'Geozone Breach', value: 'geozone_breach', icon: 'shield' }
 ]
 
 const SEVERITY_OPTIONS: { label: string; value: Severity; color: string }[] = [
@@ -162,14 +170,18 @@ const filteredAssets = computed(() => {
 // Computed
 // ============================================================================
 
+const derivedRuleScope = computed(() => {
+  const deviceTriggers: TriggerType[] = ['low_battery', 'no_report', 'signal_strength', 'firmware_update']
+  return deviceTriggers.includes(form.value.triggerType) ? 'device' : 'asset'
+})
+
 const isZoneTrigger = computed(() =>
-  form.value.triggerType === 'zone_enter' || form.value.triggerType === 'zone_exit'
+  form.value.triggerType === 'zone_enter' || form.value.triggerType === 'zone_exit' || form.value.triggerType === 'geozone_breach'
 )
 
 const isArrivalOverdue = computed(() => form.value.triggerType === 'arrival_overdue')
 const isLowBattery = computed(() => form.value.triggerType === 'low_battery')
 const isNoReport = computed(() => form.value.triggerType === 'no_report')
-
 const formValid = computed(() => {
   return form.value.name.trim().length > 0
 })
@@ -502,16 +514,52 @@ onMounted(async () => {
         <!-- Section 2: Trigger -->
         <!-- ================================================================ -->
         <div class="bg-surface-dark rounded-xl border border-border-dark p-6 flex flex-col gap-5">
-          <div class="flex items-center gap-2 mb-1">
-            <span class="material-symbols-outlined text-[20px] text-primary">bolt</span>
-            <h2 class="text-white text-base font-semibold">Trigger</h2>
+          <div class="flex items-center justify-between mb-1">
+            <div class="flex items-center gap-2">
+              <span class="material-symbols-outlined text-[20px] text-primary">bolt</span>
+              <h2 class="text-white text-base font-semibold">Trigger</h2>
+            </div>
+            <!-- Scope Badge (auto-derived, read-only) -->
+            <span
+              class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium"
+              :class="derivedRuleScope === 'device' ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/30' : 'bg-teal-500/10 text-teal-400 border border-teal-500/30'"
+            >
+              <span class="material-symbols-outlined text-[14px]">{{ derivedRuleScope === 'device' ? 'router' : 'inventory_2' }}</span>
+              {{ derivedRuleScope === 'device' ? 'Device Rule' : 'Asset Rule' }}
+            </span>
           </div>
 
-          <div class="flex flex-col gap-1.5">
-            <label class="text-text-secondary text-xs font-semibold uppercase tracking-wider">Trigger Type</label>
-            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+          <!-- Asset Rules Group -->
+          <div class="flex flex-col gap-2">
+            <label class="text-text-secondary text-xs font-semibold uppercase tracking-wider flex items-center gap-1.5">
+              <span class="material-symbols-outlined text-[14px] text-teal-400">inventory_2</span>
+              Asset Rules
+            </label>
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
               <button
-                v-for="opt in TRIGGER_TYPE_OPTIONS"
+                v-for="opt in ASSET_TRIGGER_OPTIONS"
+                :key="opt.value"
+                @click="form.triggerType = opt.value"
+                class="flex flex-col items-center gap-2 p-3 rounded-lg border transition-all text-center"
+                :class="form.triggerType === opt.value
+                  ? 'bg-primary/10 border-primary text-primary'
+                  : 'bg-background-dark border-border-dark text-text-secondary hover:border-primary/50 hover:text-white'"
+              >
+                <span class="material-symbols-outlined text-[22px]">{{ opt.icon }}</span>
+                <span class="text-xs font-medium">{{ opt.label }}</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Device Rules Group -->
+          <div class="flex flex-col gap-2">
+            <label class="text-text-secondary text-xs font-semibold uppercase tracking-wider flex items-center gap-1.5">
+              <span class="material-symbols-outlined text-[14px] text-cyan-400">router</span>
+              Device Rules
+            </label>
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+              <button
+                v-for="opt in DEVICE_TRIGGER_OPTIONS"
                 :key="opt.value"
                 @click="form.triggerType = opt.value"
                 class="flex flex-col items-center gap-2 p-3 rounded-lg border transition-all text-center"

@@ -40,6 +40,7 @@ const menuItems = [
   { id: 'geozones', label: 'Geozones', icon: 'map' },
   { id: 'alerts', label: 'Alerts', icon: 'warning' },
   { id: 'alert-rules', label: 'Alert Rules', icon: 'rule' },
+  { id: 'bulk-operations', label: 'Bulk Operations', icon: 'dynamic_feed' },
   { id: 'notifications', label: 'Notifications', icon: 'notifications' },
   { id: 'consumption', label: 'Consumption', icon: 'analytics' },
   { id: 'customer-dashboard', label: 'Customer View', icon: 'dashboard_customize' },

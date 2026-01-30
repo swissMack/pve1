@@ -44,7 +44,7 @@ const menuItems = [
   { id: 'notifications', label: 'Notifications', icon: 'notifications' },
   { id: 'consumption', label: 'Consumption', icon: 'analytics' },
   { id: 'customer-dashboard', label: 'Customer View', icon: 'dashboard_customize' },
-  { id: 'support', label: 'Support', icon: 'help' },
+  { id: 'support', label: 'Bob Support', icon: 'forum' },
   { id: 'about', label: 'About', icon: 'info' }
 ]
 

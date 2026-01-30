@@ -4246,6 +4246,561 @@ app.put('/api/devices/:id/location', async (req, res) => {
   }
 })
 
+// ============================================================================
+// SPRINT 6: NLQ DASHBOARD + BOB SUPPORT CHAT
+// ============================================================================
+
+// --- NLQ Schema Metadata for Claude ---
+const NLQ_SCHEMA_METADATA = {
+  devices: {
+    table: 'devices',
+    columns: ['id', 'name', 'status', 'device_type_id', 'location_id', 'sim_card_id', 'signal_strength', 'data_usage_mb', 'connection_type', 'latitude', 'longitude', 'temperature', 'humidity', 'light', 'battery_level', 'health_status', 'security_status', 'last_seen', 'created_at', 'updated_at'],
+    enums: { status: ['active', 'offline', 'maintenance'], connection_type: ['wifi', 'cellular', 'ethernet', 'lora', 'satellite'], health_status: ['healthy', 'degraded', 'critical'], security_status: ['secure', 'warning', 'compromised'] }
+  },
+  sim_cards: {
+    table: 'sim_cards',
+    columns: ['id', 'iccid', 'imsi', 'msisdn', 'status', 'carrier_id', 'plan_id', 'data_usage_bytes', 'data_limit_bytes', 'activation_date', 'expiry_date', 'created_at', 'updated_at'],
+    enums: { status: ['Active', 'Inactive', 'Suspended', 'Expired'] }
+  },
+  assets: {
+    table: 'assets',
+    columns: ['id', 'name', 'asset_type', 'status', 'device_id', 'tenant_id', 'description', 'metadata', 'created_at', 'updated_at', 'deleted_at'],
+    enums: { status: ['active', 'inactive', 'maintenance', 'retired'], asset_type: ['vehicle', 'container', 'equipment', 'building', 'other'] }
+  },
+  geozones: {
+    table: 'geozones',
+    columns: ['id', 'name', 'type', 'status', 'tenant_id', 'description', 'geometry', 'metadata', 'created_at', 'updated_at', 'deleted_at'],
+    enums: { type: ['circle', 'polygon', 'rectangle'], status: ['active', 'inactive'] }
+  },
+  alerts: {
+    table: 'alerts',
+    columns: ['id', 'rule_id', 'device_id', 'asset_id', 'severity', 'status', 'tenant_id', 'title', 'message', 'triggered_at', 'acknowledged_at', 'resolved_at', 'created_at'],
+    enums: { severity: ['critical', 'high', 'medium', 'low', 'info'], status: ['active', 'acknowledged', 'resolved', 'expired'] }
+  },
+  alert_rules: {
+    table: 'alert_rules',
+    columns: ['id', 'name', 'description', 'trigger_type', 'condition_config', 'severity', 'status', 'tenant_id', 'rule_scope', 'created_at', 'updated_at', 'deleted_at'],
+    enums: { severity: ['critical', 'high', 'medium', 'low', 'info'], status: ['active', 'inactive', 'draft'], rule_scope: ['device', 'asset', 'both'] }
+  },
+  notifications: {
+    table: 'notifications',
+    columns: ['id', 'user_id', 'tenant_id', 'title', 'message', 'type', 'severity', 'is_read', 'alert_id', 'created_at'],
+    enums: { type: ['alert', 'system', 'info'], severity: ['critical', 'high', 'medium', 'low', 'info'] }
+  }
+}
+
+const ENTITY_TABLE_MAP = {
+  devices: 'devices',
+  sim_cards: 'sim_cards',
+  assets: 'assets',
+  geozones: 'geozones',
+  alerts: 'alerts',
+  alert_rules: 'alert_rules',
+  notifications: 'notifications'
+}
+
+// Soft-delete tables
+const SOFT_DELETE_TABLES = ['assets', 'geozones', 'alert_rules']
+
+// NLQ System prompt
+function buildNlqSystemPrompt() {
+  const schemaDesc = Object.entries(NLQ_SCHEMA_METADATA).map(([entity, meta]) => {
+    const enumDesc = Object.entries(meta.enums || {}).map(([col, vals]) => `    ${col}: ${vals.join(', ')}`).join('\n')
+    return `  ${entity} (table: ${meta.table}):\n    columns: ${meta.columns.join(', ')}\n    enums:\n${enumDesc}`
+  }).join('\n\n')
+
+  return `You are an NLQ (Natural Language Query) parser for the IoTo Fleet Management Platform.
+Your job is to convert natural language queries into a structured JSON intent.
+
+Available entities and their schemas:
+${schemaDesc}
+
+You MUST respond with ONLY valid JSON in this exact format:
+{
+  "entity": "<one of: devices, sim_cards, assets, geozones, alerts, alert_rules, notifications>",
+  "filters": [{"field": "<column_name>", "operator": "<eq|neq|gt|gte|lt|lte|like|in|between>", "value": "<value or array>"}],
+  "sort": [{"field": "<column_name>", "direction": "<asc|desc>"}],
+  "aggregations": [{"function": "<count|sum|avg|min|max>", "field": "<column_name or omit for count(*)>", "alias": "<label>"}],
+  "timeRange": {"field": "<date column>", "start": "<ISO date>", "end": "<ISO date>", "relative": "<e.g. last 7 days>"},
+  "limit": <number, default 50>,
+  "explanation": "<brief explanation of the parsed intent>"
+}
+
+Rules:
+- Only use columns that exist in the schema above
+- Default to devices entity if ambiguous
+- Default sort by created_at DESC if no sort specified
+- Default limit to 50 if not specified
+- For text searches, use the "like" operator with the search term
+- For status queries, use exact enum values from the schema
+- Interpret "offline" as status = 'offline', "active" as status = 'active', etc.
+- Current date: ${new Date().toISOString().split('T')[0]}
+- Respond with ONLY the JSON object, no markdown or explanation outside the JSON`
+}
+
+// Parse NLQ query via Claude
+async function parseNlqQuery(queryText) {
+  if (!anthropic) throw new Error('LLM service not configured')
+
+  const response = await anthropic.messages.create({
+    model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514',
+    max_tokens: 1024,
+    system: buildNlqSystemPrompt(),
+    messages: [{ role: 'user', content: queryText }]
+  })
+
+  const textBlock = response.content.find(b => b.type === 'text')
+  if (!textBlock) throw new Error('No response from LLM')
+
+  // Extract JSON from response (handle potential markdown wrapping)
+  let jsonStr = textBlock.text.trim()
+  if (jsonStr.startsWith('```')) {
+    jsonStr = jsonStr.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
+  }
+
+  const intent = JSON.parse(jsonStr)
+
+  // Validate entity
+  if (!ENTITY_TABLE_MAP[intent.entity]) {
+    throw new Error(`Invalid entity: ${intent.entity}`)
+  }
+
+  return intent
+}
+
+// Execute NLQ intent as parameterized SQL with guardrails
+function executeNlqIntent(intent, tenantId) {
+  const entityMeta = NLQ_SCHEMA_METADATA[intent.entity]
+  if (!entityMeta) throw new Error(`Unknown entity: ${intent.entity}`)
+
+  const tableName = SCHEMA + entityMeta.table
+  const allowedColumns = new Set(entityMeta.columns)
+  const params = []
+  let paramIdx = 0
+
+  // Build SELECT
+  let selectClause = '*'
+  if (intent.aggregations && intent.aggregations.length > 0) {
+    const aggParts = intent.aggregations.map(agg => {
+      if (agg.field && !allowedColumns.has(agg.field)) return null
+      const col = agg.field || '*'
+      const alias = agg.alias || `${agg.function}_result`
+      return `${agg.function}(${col}) AS "${alias}"`
+    }).filter(Boolean)
+    if (aggParts.length > 0) selectClause = aggParts.join(', ')
+  }
+
+  // Build WHERE conditions
+  const conditions = []
+
+  // Mandatory tenant scoping for tables that have tenant_id
+  if (entityMeta.columns.includes('tenant_id') && tenantId) {
+    paramIdx++
+    conditions.push(`tenant_id = $${paramIdx}`)
+    params.push(tenantId)
+  }
+
+  // Soft delete filter
+  if (SOFT_DELETE_TABLES.includes(intent.entity)) {
+    conditions.push('deleted_at IS NULL')
+  }
+
+  // User filters
+  if (intent.filters && Array.isArray(intent.filters)) {
+    for (const filter of intent.filters) {
+      if (!allowedColumns.has(filter.field)) continue // Skip invalid columns
+
+      switch (filter.operator) {
+        case 'eq':
+          paramIdx++
+          conditions.push(`${filter.field} = $${paramIdx}`)
+          params.push(filter.value)
+          break
+        case 'neq':
+          paramIdx++
+          conditions.push(`${filter.field} != $${paramIdx}`)
+          params.push(filter.value)
+          break
+        case 'gt':
+          paramIdx++
+          conditions.push(`${filter.field} > $${paramIdx}`)
+          params.push(filter.value)
+          break
+        case 'gte':
+          paramIdx++
+          conditions.push(`${filter.field} >= $${paramIdx}`)
+          params.push(filter.value)
+          break
+        case 'lt':
+          paramIdx++
+          conditions.push(`${filter.field} < $${paramIdx}`)
+          params.push(filter.value)
+          break
+        case 'lte':
+          paramIdx++
+          conditions.push(`${filter.field} <= $${paramIdx}`)
+          params.push(filter.value)
+          break
+        case 'like':
+          paramIdx++
+          conditions.push(`${filter.field}::text ILIKE $${paramIdx}`)
+          params.push(`%${filter.value}%`)
+          break
+        case 'in':
+          if (Array.isArray(filter.value)) {
+            const placeholders = filter.value.map(() => { paramIdx++; return `$${paramIdx}` })
+            conditions.push(`${filter.field} IN (${placeholders.join(', ')})`)
+            params.push(...filter.value)
+          }
+          break
+        case 'between':
+          if (Array.isArray(filter.value) && filter.value.length === 2) {
+            paramIdx++
+            conditions.push(`${filter.field} >= $${paramIdx}`)
+            params.push(filter.value[0])
+            paramIdx++
+            conditions.push(`${filter.field} <= $${paramIdx}`)
+            params.push(filter.value[1])
+          }
+          break
+      }
+    }
+  }
+
+  // Time range filter
+  if (intent.timeRange) {
+    const tf = intent.timeRange.field
+    if (allowedColumns.has(tf)) {
+      if (intent.timeRange.start) {
+        paramIdx++
+        conditions.push(`${tf} >= $${paramIdx}`)
+        params.push(intent.timeRange.start)
+      }
+      if (intent.timeRange.end) {
+        paramIdx++
+        conditions.push(`${tf} <= $${paramIdx}`)
+        params.push(intent.timeRange.end)
+      }
+      if (intent.timeRange.relative) {
+        // Parse relative time ranges
+        const match = intent.timeRange.relative.match(/last\s+(\d+)\s+(day|week|month|hour|year)s?/i)
+        if (match) {
+          const num = parseInt(match[1])
+          const unit = match[2].toLowerCase()
+          paramIdx++
+          conditions.push(`${tf} >= NOW() - INTERVAL '${num} ${unit}s'`)
+        }
+      }
+    }
+  }
+
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
+
+  // Build ORDER BY
+  let orderClause = 'ORDER BY created_at DESC'
+  if (intent.sort && intent.sort.length > 0) {
+    const sortParts = intent.sort
+      .filter(s => allowedColumns.has(s.field))
+      .map(s => `${s.field} ${s.direction === 'asc' ? 'ASC' : 'DESC'}`)
+    if (sortParts.length > 0) orderClause = `ORDER BY ${sortParts.join(', ')}`
+  }
+
+  // Limit (hard cap at 500)
+  const limit = Math.min(intent.limit || 50, 500)
+
+  // Build GROUP BY for aggregations
+  let groupClause = ''
+  if (intent.aggregations && intent.aggregations.length > 0) {
+    // If there are non-aggregated filters, no order/limit needed for aggregations
+    orderClause = ''
+  }
+
+  const sql = `SELECT ${selectClause} FROM ${tableName} ${whereClause} ${groupClause} ${orderClause} LIMIT ${limit}`.replace(/\s+/g, ' ').trim()
+
+  return { sql, params }
+}
+
+// Audit log helper (non-blocking)
+function logNlqQuery(data) {
+  const { tenantId, userId, queryText, parsedIntent, generatedSql, resultCount, status, errorMessage, executionTimeMs, modelUsed } = data
+  pool.query(
+    `INSERT INTO ${SCHEMA}nlq_query_log (tenant_id, user_id, query_text, parsed_intent, generated_sql, result_count, status, error_message, execution_time_ms, model_used) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+    [tenantId || 'default', userId || 'anonymous', queryText, parsedIntent ? JSON.stringify(parsedIntent) : null, generatedSql, resultCount, status, errorMessage, executionTimeMs, modelUsed]
+  ).catch(err => console.error('[NLQ Audit] Failed to log:', err.message))
+}
+
+// POST /api/nlq/query - NLQ query endpoint
+app.post('/api/nlq/query', async (req, res) => {
+  const startTime = Date.now()
+  const { query } = req.body
+  const userId = req.headers['x-user-id'] || 'anonymous'
+  const tenantId = req.headers['x-tenant-id'] || 'default'
+
+  if (!query || typeof query !== 'string') {
+    return res.status(400).json({ success: false, error: 'Query string is required' })
+  }
+
+  if (query.length > 500) {
+    return res.status(400).json({ success: false, error: 'Query must be 500 characters or less' })
+  }
+
+  if (!anthropic) {
+    return res.status(503).json({ success: false, error: 'LLM service not configured' })
+  }
+
+  const clientId = req.ip || 'anonymous'
+  if (!checkLlmRateLimit(clientId)) {
+    return res.status(429).json({ success: false, error: 'Rate limit exceeded. Please try again shortly.' })
+  }
+
+  try {
+    // Step 1: Parse natural language → structured intent
+    const intent = await parseNlqQuery(query)
+    console.log('[NLQ] Parsed intent:', JSON.stringify(intent))
+
+    // Step 2: Intent → parameterized SQL
+    const { sql, params } = executeNlqIntent(intent, tenantId)
+    console.log('[NLQ] Generated SQL:', sql, 'Params:', params)
+
+    // Step 3: Execute query
+    const result = await pool.query(sql, params)
+    const executionTimeMs = Date.now() - startTime
+
+    // Step 4: Audit log (non-blocking)
+    logNlqQuery({
+      tenantId, userId, queryText: query, parsedIntent: intent,
+      generatedSql: sql, resultCount: result.rows.length,
+      status: 'success', executionTimeMs,
+      modelUsed: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514'
+    })
+
+    res.json({
+      success: true,
+      data: {
+        intent,
+        results: toCamelCase(result.rows),
+        totalCount: result.rows.length,
+        executionTimeMs,
+        explanation: intent.explanation || 'Query executed successfully'
+      }
+    })
+  } catch (error) {
+    const executionTimeMs = Date.now() - startTime
+    console.error('[NLQ] Error:', error.message)
+
+    logNlqQuery({
+      tenantId, userId, queryText: query,
+      status: 'error', errorMessage: error.message, executionTimeMs,
+      modelUsed: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514'
+    })
+
+    res.status(500).json({
+      success: false,
+      error: 'Failed to process query: ' + error.message
+    })
+  }
+})
+
+// ============================================================================
+// CHAT CONVERSATIONS API
+// ============================================================================
+
+// Chat system prompt builder
+function buildChatSystemPrompt(userContext) {
+  return `You are Bob, the AI support assistant for the IoTo Fleet Management Platform (FMP).
+
+About IoTo FMP:
+- IoTo is an IoT fleet management platform for managing devices, SIM cards, assets, geozones, alerts, and consumption analytics.
+- Users can monitor device health, track assets, set up geofenced alerts, manage SIM card connectivity, and analyze data consumption.
+- The platform supports multiple user roles: Super Admin, Admin, FMP, DMP (Device Management), CMP (Connectivity Management), and Viewer.
+
+Your capabilities:
+- Answer questions about the platform features and how to use them
+- Help troubleshoot issues with devices, SIM cards, and connectivity
+- Explain alert rules, geozones, and bulk operations
+- Provide general IoT fleet management guidance
+- Help interpret data and consumption patterns
+
+User context:
+- Name: ${userContext?.name || 'Unknown'}
+- Role: ${userContext?.role || 'User'}
+
+Guidelines:
+- Be concise, friendly, and professional
+- If you don't know something specific about the user's data, say so
+- Never reveal internal system details, database schemas, or API endpoints
+- If asked about actions you can't perform, suggest using the appropriate portal page
+- Format responses with markdown for readability when helpful`
+}
+
+// GET /api/chat/conversations - List conversations
+app.get('/api/chat/conversations', async (req, res) => {
+  try {
+    const userId = req.headers['x-user-id'] || req.query.userId || 'anonymous'
+    const tenantId = req.headers['x-tenant-id'] || 'default'
+
+    const result = await pool.query(
+      `SELECT * FROM ${SCHEMA}chat_conversations WHERE user_id = $1 AND tenant_id = $2 AND is_active = true ORDER BY updated_at DESC`,
+      [userId, tenantId]
+    )
+
+    res.json({ success: true, data: toCamelCase(result.rows) })
+  } catch (error) {
+    console.error('[Chat] Error listing conversations:', error.message)
+    res.status(500).json({ success: false, error: 'Failed to list conversations' })
+  }
+})
+
+// POST /api/chat/conversations - Create conversation
+app.post('/api/chat/conversations', async (req, res) => {
+  try {
+    const userId = req.headers['x-user-id'] || req.body.userId || 'anonymous'
+    const tenantId = req.headers['x-tenant-id'] || 'default'
+    const { title } = req.body
+
+    const result = await pool.query(
+      `INSERT INTO ${SCHEMA}chat_conversations (user_id, tenant_id, title) VALUES ($1, $2, $3) RETURNING *`,
+      [userId, tenantId, title || 'New Conversation']
+    )
+
+    res.json({ success: true, data: toCamelCase(result.rows[0]) })
+  } catch (error) {
+    console.error('[Chat] Error creating conversation:', error.message)
+    res.status(500).json({ success: false, error: 'Failed to create conversation' })
+  }
+})
+
+// GET /api/chat/conversations/:id/messages - Get messages
+app.get('/api/chat/conversations/:id/messages', async (req, res) => {
+  try {
+    const { id } = req.params
+
+    const result = await pool.query(
+      `SELECT * FROM ${SCHEMA}chat_messages WHERE conversation_id = $1 ORDER BY created_at ASC LIMIT 200`,
+      [id]
+    )
+
+    res.json({ success: true, data: toCamelCase(result.rows) })
+  } catch (error) {
+    console.error('[Chat] Error fetching messages:', error.message)
+    res.status(500).json({ success: false, error: 'Failed to fetch messages' })
+  }
+})
+
+// POST /api/chat/conversations/:id/messages - Send message
+app.post('/api/chat/conversations/:id/messages', async (req, res) => {
+  try {
+    const { id } = req.params
+    const { content, userContext } = req.body
+
+    if (!content || typeof content !== 'string') {
+      return res.status(400).json({ success: false, error: 'Message content is required' })
+    }
+
+    if (content.length > 2000) {
+      return res.status(400).json({ success: false, error: 'Message must be 2000 characters or less' })
+    }
+
+    if (!anthropic) {
+      return res.status(503).json({ success: false, error: 'LLM service not configured' })
+    }
+
+    const clientId = req.ip || 'anonymous'
+    if (!checkLlmRateLimit(clientId)) {
+      return res.status(429).json({ success: false, error: 'Rate limit exceeded' })
+    }
+
+    // Verify conversation exists
+    const convResult = await pool.query(
+      `SELECT * FROM ${SCHEMA}chat_conversations WHERE id = $1 AND is_active = true`,
+      [id]
+    )
+    if (convResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Conversation not found' })
+    }
+
+    // Save user message
+    await pool.query(
+      `INSERT INTO ${SCHEMA}chat_messages (conversation_id, role, content) VALUES ($1, 'user', $2)`,
+      [id, content]
+    )
+
+    // Load conversation history (last 50 messages for context)
+    const historyResult = await pool.query(
+      `SELECT role, content FROM ${SCHEMA}chat_messages WHERE conversation_id = $1 ORDER BY created_at DESC LIMIT 50`,
+      [id]
+    )
+    const history = historyResult.rows.reverse()
+
+    // Format for Anthropic API
+    const messages = history.map(m => ({
+      role: m.role === 'assistant' ? 'assistant' : 'user',
+      content: m.content
+    }))
+
+    // Call Claude
+    const response = await anthropic.messages.create({
+      model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514',
+      max_tokens: 1024,
+      system: buildChatSystemPrompt(userContext),
+      messages
+    })
+
+    const assistantContent = response.content[0]?.text || 'I apologize, but I could not generate a response.'
+
+    // Save assistant message
+    const savedMsg = await pool.query(
+      `INSERT INTO ${SCHEMA}chat_messages (conversation_id, role, content, metadata) VALUES ($1, 'assistant', $2, $3) RETURNING *`,
+      [id, assistantContent, JSON.stringify({ inputTokens: response.usage?.input_tokens, outputTokens: response.usage?.output_tokens })]
+    )
+
+    // Update conversation title if first exchange (auto-title)
+    const msgCount = history.length
+    if (msgCount <= 2) {
+      const titleSnippet = content.substring(0, 60) + (content.length > 60 ? '...' : '')
+      await pool.query(
+        `UPDATE ${SCHEMA}chat_conversations SET title = $1, updated_at = NOW() WHERE id = $2`,
+        [titleSnippet, id]
+      )
+    } else {
+      await pool.query(
+        `UPDATE ${SCHEMA}chat_conversations SET updated_at = NOW() WHERE id = $1`,
+        [id]
+      )
+    }
+
+    res.json({
+      success: true,
+      data: toCamelCase(savedMsg.rows[0])
+    })
+  } catch (error) {
+    console.error('[Chat] Error sending message:', error.message)
+    res.status(500).json({ success: false, error: 'Failed to send message: ' + error.message })
+  }
+})
+
+// DELETE /api/chat/conversations/:id - Delete conversation
+app.delete('/api/chat/conversations/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+
+    // Soft delete by marking inactive
+    const result = await pool.query(
+      `UPDATE ${SCHEMA}chat_conversations SET is_active = false, updated_at = NOW() WHERE id = $1 RETURNING *`,
+      [id]
+    )
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Conversation not found' })
+    }
+
+    res.json({ success: true, data: { deleted: true } })
+  } catch (error) {
+    console.error('[Chat] Error deleting conversation:', error.message)
+    res.status(500).json({ success: false, error: 'Failed to delete conversation' })
+  }
+})
+
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`API server running at http://0.0.0.0:${PORT}`)
 })

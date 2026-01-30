@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { type Device, type SIMCard } from '../data/mockData'
 import { dataService } from '../data/dataService'
+import AskBobInput from './AskBobInput.vue'
 
 interface WelcomeProps {
   onLogout: () => void
@@ -56,6 +57,9 @@ const expiringSIMs = computed(() => {
 <template>
   <div class="p-6 lg:p-8 bg-background-dark min-h-full">
     <div class="max-w-[1400px] mx-auto flex flex-col gap-8">
+      <!-- Ask Bob NLQ Input -->
+      <AskBobInput />
+
       <!-- KPI Stats Row -->
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <!-- Active Devices Card -->

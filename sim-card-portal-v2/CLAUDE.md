@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Deployment Policy
+
+**Deployment target: localhost only.** Do NOT deploy to upcloud, upcloudBSS, or any remote server until further notice. All builds and testing should be done locally via Docker Compose.
+
 ## Essential Commands
 
 ### Development
